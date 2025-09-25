@@ -1,4 +1,3 @@
-
 export enum TableStatus {
   Available = 'Disponível',
   Occupied = 'Ocupada',
@@ -6,7 +5,7 @@ export enum TableStatus {
 }
 
 export interface Table {
-  id: number;
+  id: string;
   name: string;
   status: TableStatus;
   orderId: string | null;
@@ -29,7 +28,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string;
-  tableId: number;
+  tableId: string;
   items: OrderItem[];
   total: number;
   waiterId: string;
@@ -49,4 +48,3 @@ export enum ReportType {
     Products = 'Produtos',
     Commissions = 'Comissões'
 }
-   

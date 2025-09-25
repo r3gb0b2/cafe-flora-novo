@@ -1,7 +1,12 @@
-
-import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { Product, Table, TableStatus, Order, OrderItem, Waiter } from '../types';
-import { initialProducts, initialTables, initialWaiters, initialOrders } from '../services/firebase';
+import { initialWaiters } from '../services/firebase';
+import { 
+  getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp, Timestamp, getDocs, writeBatch, query, where, getDoc 
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// @ts-ignore
+const db = window.db;
 
 interface DataContextType {
   products: Product[];
@@ -9,9 +14,9 @@ interface DataContextType {
   orders: Order[];
   waiters: Waiter[];
   isLoading: boolean;
-  getTableById: (id: number) => Table | undefined;
-  getOpenOrderByTableId: (tableId: number) => Order | undefined;
-  addProductToOrder: (tableId: number, product: Product, waiterId: string) => Promise<void>;
+  getTableById: (id: string) => Table | undefined;
+  getOpenOrderByTableId: (tableId: string) => Order | undefined;
+  addProductToOrder: (tableId: string, product: Product, waiterId: string) => Promise<void>;
   updateOrderItemQuantity: (orderId: string, productId: string, newQuantity: number) => Promise<void>;
   removeOrderItem: (orderId: string, productId: string) => Promise<void>;
   closeTable: (orderId: string, paymentMethod: string) => Promise<void>;
@@ -19,229 +24,281 @@ interface DataContextType {
   addProduct: (newProduct: Omit<Product, 'id'>) => Promise<void>;
   deleteProduct: (productId: string) => Promise<void>;
   addTable: () => Promise<void>;
-  removeTable: (tableId: number) => Promise<void>;
+  removeTable: (tableId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
-const API_LATENCY = 400;
-
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [tables, setTables] = useState<Table[]>(initialTables);
-  const [orders, setOrders] = useState<Order[]>(initialOrders);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [waiters, setWaiters] = useState<Waiter[]>(initialWaiters);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false });
 
-  const getTableById = useCallback((id: number) => tables.find(t => t.id === id), [tables]);
+  useEffect(() => {
+     if (initialLoad.products && initialLoad.tables && initialLoad.orders) {
+      setIsLoading(false);
+    }
+  }, [initialLoad]);
 
-  const getOpenOrderByTableId = useCallback((tableId: number) => {
+  useEffect(() => {
+    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+      const productsData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+              id: doc.id,
+              name: data.name,
+              price: data.price,
+              stock: data.stock,
+              category: data.category,
+          } as Product;
+      });
+      setProducts(productsData);
+      setInitialLoad(prev => ({ ...prev, products: true }));
+    });
+
+    const unsubTables = onSnapshot(collection(db, "tables"), (snapshot) => {
+      const tablesData = snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+              id: doc.id,
+              name: data.name,
+              status: data.status,
+              orderId: data.orderId,
+          } as Table;
+      });
+      setTables(tablesData);
+      setInitialLoad(prev => ({ ...prev, tables: true }));
+    });
+    
+    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+      const ordersData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            tableId: data.tableId,
+            items: data.items,
+            total: data.total,
+            waiterId: data.waiterId,
+            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+            closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
+            paymentMethod: data.paymentMethod,
+            status: data.status,
+        } as Order;
+      });
+      setOrders(ordersData);
+      setInitialLoad(prev => ({ ...prev, orders: true }));
+    });
+
+    return () => {
+      unsubProducts();
+      unsubTables();
+      unsubOrders();
+    };
+  }, []);
+
+  const getTableById = useCallback((id: string) => tables.find(t => t.id === id), [tables]);
+
+  const getOpenOrderByTableId = useCallback((tableId: string) => {
     const table = tables.find(t => t.id === tableId);
     if (!table || !table.orderId) return undefined;
     return orders.find(o => o.id === table.orderId && o.status === 'open');
   }, [tables, orders]);
   
-  const addProductToOrder = async (tableId: number, product: Product, waiterId: string) => {
+  const addProductToOrder = async (tableId: string, product: Product, waiterId: string) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    if (product.stock <= 0) {
-        alert("Produto fora de estoque!");
-        setIsLoading(false);
-        return;
-    }
-
-    const openOrder = getOpenOrderByTableId(tableId);
-
-    if (openOrder) {
-        setOrders(prevOrders => prevOrders.map(o => {
-            if (o.id === openOrder.id) {
-                const existingItem = o.items.find(item => item.productId === product.id);
-                let newItems: OrderItem[];
-                if (existingItem) {
-                    newItems = o.items.map(item =>
-                        item.productId === product.id
-                            ? { ...item, quantity: item.quantity + 1 }
-                            : item
-                    );
-                } else {
-                    newItems = [...o.items, { productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }];
-                }
-                const newTotal = newItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-                return { ...o, items: newItems, total: newTotal };
+    try {
+        await runTransaction(db, async (transaction) => {
+            const productRef = doc(db, 'products', product.id);
+            const productDoc = await transaction.get(productRef);
+            if (!productDoc.exists() || productDoc.data().stock < 1) {
+                throw new Error("Produto fora de estoque!");
             }
-            return o;
-        }));
-    } else {
-        const newOrderId = `order_${Date.now()}`;
-        const newOrder: Order = {
-            id: newOrderId,
-            tableId,
-            waiterId,
-            items: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }],
-            total: product.price,
-            createdAt: new Date(),
-            status: 'open',
-        };
-        setOrders(prev => [...prev, newOrder]);
-        setTables(prev => prev.map(t => t.id === tableId ? { ...t, orderId: newOrderId, status: TableStatus.Occupied } : t));
-    }
+            const newStock = productDoc.data().stock - 1;
 
-    setProducts(prevProducts => prevProducts.map(p => p.id === product.id ? {...p, stock: p.stock - 1} : p));
-    setTables(prevTables => prevTables.map(t => t.id === tableId ? { ...t, status: TableStatus.Occupied } : t));
-    setIsLoading(false);
+            const tableRef = doc(db, 'tables', tableId);
+            const tableDoc = await transaction.get(tableRef);
+            if (!tableDoc.exists()) throw new Error("Mesa não encontrada!");
+
+            const orderId = tableDoc.data().orderId;
+
+            if (orderId) {
+                const orderRef = doc(db, 'orders', orderId);
+                const orderDoc = await transaction.get(orderRef);
+                if (!orderDoc.exists() || orderDoc.data().status !== 'open') {
+                    throw new Error("Pedido associado à mesa não está aberto ou não foi encontrado.");
+                }
+                const currentOrderData = orderDoc.data();
+                const existingItem = currentOrderData.items.find((item: OrderItem) => item.productId === product.id);
+                let newItems = existingItem
+                    ? currentOrderData.items.map((item: OrderItem) => item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item)
+                    : [...currentOrderData.items, { productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }];
+                
+                const newTotal = newItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+                transaction.update(orderRef, { items: newItems, total: newTotal });
+            } else {
+                const newOrderRef = doc(collection(db, 'orders'));
+                const newOrderData = { tableId, waiterId, items: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }], total: product.price, createdAt: serverTimestamp(), status: 'open' };
+                transaction.set(newOrderRef, newOrderData);
+                transaction.update(tableRef, { orderId: newOrderRef.id, status: TableStatus.Occupied });
+            }
+            transaction.update(productRef, { stock: newStock });
+        });
+    } catch (e: any) {
+        console.error("Transaction failed: ", e);
+        alert(e.message || "Não foi possível adicionar o item. Tente novamente.");
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const updateOrderItemQuantity = async (orderId: string, productId: string, newQuantity: number) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    let stockChange = 0;
+    try {
+        await runTransaction(db, async (transaction) => {
+            const orderRef = doc(db, 'orders', orderId);
+            const productRef = doc(db, 'products', productId);
 
-    setOrders(prevOrders => prevOrders.map(o => {
-        if (o.id === orderId) {
-            const item = o.items.find(i => i.productId === productId);
-            if (!item) return o;
-            
-            stockChange = item.quantity - newQuantity;
+            const orderDoc = await transaction.get(orderRef);
+            const productDoc = await transaction.get(productRef);
 
-            const newItems = o.items.map(i => i.productId === productId ? { ...i, quantity: newQuantity } : i).filter(i => i.quantity > 0);
-            const newTotal = newItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-            return { ...o, items: newItems, total: newTotal };
-        }
-        return o;
-    }));
+            if (!orderDoc.exists() || !productDoc.exists()) throw new Error("Pedido ou produto não encontrado.");
 
-    if (stockChange !== 0) {
-        setProducts(prevProducts => prevProducts.map(p => p.id === productId ? {...p, stock: p.stock + stockChange} : p));
+            const orderData = orderDoc.data();
+            const item = orderData.items.find((i: OrderItem) => i.productId === productId);
+            if (!item) return;
+
+            const stockChange = item.quantity - newQuantity;
+            const newStock = productDoc.data().stock + stockChange;
+
+            if (newStock < 0) throw new Error(`Estoque insuficiente. Apenas ${productDoc.data().stock} unidades disponíveis.`);
+
+            const newItems = orderData.items.map((i: OrderItem) => i.productId === productId ? { ...i, quantity: newQuantity } : i).filter((i: OrderItem) => i.quantity > 0);
+            const newTotal = newItems.reduce((acc, currentItem) => acc + (currentItem.unitPrice * currentItem.quantity), 0);
+
+            transaction.update(productRef, { stock: newStock });
+            transaction.update(orderRef, { items: newItems, total: newTotal });
+        });
+    } catch (e: any) {
+        console.error("Transaction failed: ", e);
+        alert(e.message || "Não foi possível atualizar o item.");
+    } finally {
+        setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
-  const removeOrderItem = async (orderId: string, productId: string) => {
-    // This function calls another async function, so it doesn't need its own loading logic.
-    await updateOrderItemQuantity(orderId, productId, 0);
-  };
+  const removeOrderItem = (orderId: string, productId: string) => updateOrderItemQuantity(orderId, productId, 0);
   
   const closeTable = async (orderId: string, paymentMethod: string) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    let closedOrder: Order | undefined;
-    setOrders(prevOrders => prevOrders.map(o => {
-        if (o.id === orderId) {
-          closedOrder = { ...o, status: 'closed', closedAt: new Date(), paymentMethod };
-          return closedOrder;
-        }
-        return o;
-    }));
+    try {
+        const orderRef = doc(db, 'orders', orderId);
+        const orderDoc = await getDoc(orderRef);
+        if(!orderDoc.exists()) throw new Error("Pedido não encontrado");
 
-    if (closedOrder) {
-      setTables(prevTables => prevTables.map(t =>
-          t.orderId === orderId
-              ? { ...t, status: TableStatus.Available, orderId: null }
-              : t
-      ));
+        const batch = writeBatch(db);
+        batch.update(orderRef, { status: 'closed', closedAt: serverTimestamp(), paymentMethod });
+        
+        const tableRef = doc(db, 'tables', orderDoc.data().tableId);
+        batch.update(tableRef, { status: TableStatus.Available, orderId: null });
+        
+        await batch.commit();
+    } catch (e: any) {
+        console.error("Error closing table: ", e);
+        alert(e.message || "Não foi possível fechar a mesa.");
+    } finally {
+        setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const updateProduct = async (updatedProduct: Product) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
-    setIsLoading(false);
+    try {
+        const productRef = doc(db, "products", updatedProduct.id);
+        const { id, ...data } = updatedProduct;
+        await updateDoc(productRef, data);
+    } catch (e) { console.error(e); alert("Falha ao atualizar produto."); }
+    finally { setIsLoading(false); }
   };
 
   const addProduct = async (newProductData: Omit<Product, 'id'>) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    const newProduct: Product = {
-      id: `prod_${Date.now()}`,
-      ...newProductData
-    };
-    setProducts([...products, newProduct]);
-    setIsLoading(false);
+    try {
+      await addDoc(collection(db, 'products'), newProductData);
+    } catch (e) { console.error(e); alert("Falha ao adicionar produto."); }
+    finally { setIsLoading(false); }
   };
 
   const deleteProduct = async (productId: string) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    setProducts(products.filter(p => p.id !== productId));
-    setIsLoading(false);
+    try {
+      await deleteDoc(doc(db, "products", productId));
+    } catch (e) { console.error(e); alert("Falha ao remover produto."); }
+    finally { setIsLoading(false); }
   };
   
   const addTable = async () => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
-    const newTable: Table = {
-      id: newId,
-      name: `Mesa ${newId}`,
-      status: TableStatus.Available,
-      orderId: null
-    };
-    setTables([...tables, newTable]);
-    setIsLoading(false);
+    try {
+        const newTableNumber = tables.length + 1;
+        const newTableData = { name: `Mesa ${newTableNumber}`, status: TableStatus.Available, orderId: null };
+        await addDoc(collection(db, 'tables'), newTableData);
+    } catch (e) { console.error(e); alert("Falha ao adicionar mesa."); }
+    finally { setIsLoading(false); }
   };
 
-  const removeTable = async (tableId: number) => {
+  const removeTable = async (tableId: string) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-    const table = getTableById(tableId);
-    if(table && table.status !== TableStatus.Available) {
-      alert("Não é possível remover uma mesa que está em uso.");
-      setIsLoading(false);
-      return;
-    }
-    setTables(tables.filter(t => t.id !== tableId));
-    setIsLoading(false);
+    try {
+      const table = tables.find(t => t.id === tableId);
+      if(table && table.status !== TableStatus.Available) {
+        throw new Error("Não é possível remover uma mesa que está em uso.");
+      }
+      await deleteDoc(doc(db, "tables", tableId));
+    } catch (e: any) { console.error(e); alert(e.message || "Falha ao remover mesa."); }
+    finally { setIsLoading(false); }
   };
 
   const cancelOrder = async (orderId: string) => {
     setIsLoading(true);
-    await new Promise(res => setTimeout(res, API_LATENCY));
-      const orderToCancel = orders.find(o => o.id === orderId);
-      if (!orderToCancel) {
+    try {
+        await runTransaction(db, async (transaction) => {
+            const orderRef = doc(db, 'orders', orderId);
+            const orderDoc = await transaction.get(orderRef);
+            if (!orderDoc.exists()) throw new Error("Pedido não encontrado.");
+
+            const orderData = orderDoc.data();
+
+            // Return items to stock
+            for (const item of orderData.items) {
+                const productRef = doc(db, 'products', item.productId);
+                const productDoc = await transaction.get(productRef);
+                if (productDoc.exists()) {
+                    const newStock = productDoc.data().stock + item.quantity;
+                    transaction.update(productRef, { stock: newStock });
+                }
+            }
+
+            // Free up the table
+            const tableRef = doc(db, 'tables', orderData.tableId);
+            transaction.update(tableRef, { status: TableStatus.Available, orderId: null });
+
+            // Delete the order
+            transaction.delete(orderRef);
+        });
+    } catch (e: any) {
+        console.error("Transaction failed: ", e);
+        alert(e.message || "Não foi possível cancelar o pedido.");
+    } finally {
         setIsLoading(false);
-        return;
-      }
-
-      // Return items to stock
-      orderToCancel.items.forEach(item => {
-          setProducts(prev => prev.map(p => 
-              p.id === item.productId ? { ...p, stock: p.stock + item.quantity } : p
-          ));
-      });
-
-      // Free up the table
-      setTables(prev => prev.map(t => 
-          t.id === orderToCancel.tableId ? { ...t, status: TableStatus.Available, orderId: null } : t
-      ));
-
-      // Remove the order
-      setOrders(prev => prev.filter(o => o.id !== orderId));
-      setIsLoading(false);
+    }
   };
 
 
-  const value = {
-    products,
-    tables,
-    orders,
-    waiters,
-    isLoading,
-    getTableById,
-    getOpenOrderByTableId,
-    addProductToOrder,
-    updateOrderItemQuantity,
-    removeOrderItem,
-    closeTable,
-    updateProduct,
-    addProduct,
-    deleteProduct,
-    addTable,
-    removeTable,
-    cancelOrder,
-  };
+  const value = { products, tables, orders, waiters, isLoading, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

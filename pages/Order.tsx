@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
@@ -9,7 +8,7 @@ import Modal from '../components/ui/Modal';
 import { PlusIcon, TrashIcon } from '@heroicons/react/24/solid';
 
 const Order: React.FC = () => {
-  const { tableId } = useParams();
+  const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
   const {
     getTableById,
@@ -28,9 +27,12 @@ const Order: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState('Cartão de Crédito');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const numericTableId = Number(tableId);
-  const table = getTableById(numericTableId);
-  const order = getOpenOrderByTableId(numericTableId);
+  if (!tableId) {
+    return <div>ID da mesa não fornecido.</div>;
+  }
+
+  const table = getTableById(tableId);
+  const order = getOpenOrderByTableId(tableId);
 
   const handleCloseTable = async () => {
     if (order) {
@@ -143,7 +145,7 @@ const Order: React.FC = () => {
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-sm text-gray-600">R$ {product.price.toFixed(2)} - Estoque: {product.stock}</p>
                     </div>
-                    <Button onClick={() => addProductToOrder(numericTableId, product, 'waiter_1')} disabled={product.stock <= 0 || isLoading}>
+                    <Button onClick={() => addProductToOrder(tableId, product, 'waiter_1')} disabled={product.stock <= 0 || isLoading}>
                        <PlusIcon className="w-5 h-5"/>
                     </Button>
                 </div>
