@@ -45,7 +45,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [initialLoad]);
 
   useEffect(() => {
+    console.log("Setting up Firestore listeners. If you don't see data, check your Firebase config in index.html and your Firestore security rules.");
+    
     const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
+      console.log(`Firestore update: Received ${snapshot.docs.length} products.`);
       const productsData = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
@@ -61,6 +64,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const unsubTables = onSnapshot(collection(db, "tables"), (snapshot) => {
+      console.log(`Firestore update: Received ${snapshot.docs.length} tables.`);
       const tablesData = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
@@ -75,6 +79,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
     
     const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
+      console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
       const ordersData = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -243,7 +248,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addTable = async () => {
     setIsLoading(true);
     try {
-        const newTableNumber = tables.length + 1;
+        // Fetch current table count to avoid race conditions with local state
+        const tablesCollectionRef = collection(db, 'tables');
+        const tablesSnapshot = await getDocs(tablesCollectionRef);
+        const newTableNumber = tablesSnapshot.size + 1;
         const newTableData = { name: `Mesa ${newTableNumber}`, status: TableStatus.Available, orderId: null };
         await addDoc(collection(db, 'tables'), newTableData);
     } catch (e) { console.error(e); alert("Falha ao adicionar mesa."); }

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
@@ -47,9 +46,11 @@ const Admin: React.FC = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {openOrders.map(order => (
+                            {openOrders.map(order => {
+                                const tableName = tables.find(t => t.id === order.tableId)?.name || `ID: ${order.tableId}`;
+                                return (
                                 <tr key={order.id} className="border-b hover:bg-gray-50">
-                                    <td className="p-3">Mesa {order.tableId}</td>
+                                    <td className="p-3">{tableName}</td>
                                     <td className="p-3">{new Date(order.createdAt).toLocaleTimeString('pt-BR')}</td>
                                     <td className="p-3">{order.items.length}</td>
                                     <td className="p-3 text-right">R$ {order.total.toFixed(2)}</td>
@@ -58,7 +59,7 @@ const Admin: React.FC = () => {
                                             variant="danger" 
                                             disabled={isLoading}
                                             onClick={() => {
-                                                if(window.confirm(`Tem certeza que deseja cancelar o pedido da Mesa ${order.tableId}?`)){
+                                                if(window.confirm(`Tem certeza que deseja cancelar o pedido da ${tableName}?`)){
                                                     cancelOrder(order.id)
                                                 }
                                             }}
@@ -67,7 +68,7 @@ const Admin: React.FC = () => {
                                         </Button>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 ) : (

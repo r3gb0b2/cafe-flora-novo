@@ -10,6 +10,7 @@ import Inventory from './pages/Inventory';
 import Reports from './pages/Reports';
 import Admin from './pages/Admin';
 import { DataProvider, useData } from './context/DataContext';
+import FirebaseConfigWarning from './components/FirebaseConfigWarning';
 
 const LoadingOverlay: React.FC = () => {
   const { isLoading } = useData();
@@ -32,6 +33,7 @@ const App: React.FC = () => {
   return (
     <DataProvider>
       <HashRouter>
+        <FirebaseConfigWarning />
         <div className="flex h-screen bg-gray-100 font-sans">
           <Sidebar />
           <div className="flex-1 flex flex-col overflow-hidden">

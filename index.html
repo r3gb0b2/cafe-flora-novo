@@ -29,19 +29,21 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
         import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-        // Your web app's Firebase configuration
-        // Este é um objeto de configuração de EXEMPLO. Substitua pelos dados do seu projeto.
-        const firebaseConfig = {
-          apiKey: "YOUR_API_KEY",
-          authDomain: "YOUR_AUTH_DOMAIN",
-          projectId: "YOUR_PROJECT_ID",
-          storageBucket: "YOUR_STORAGE_BUCKET",
-          messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-          appId: "YOUR_APP_ID"
-        };
-
+        
+        // ATENÇÃO: Substitua os valores abaixo pelas credenciais do SEU projeto Firebase.
+        // Você pode encontrá-las no Console do Firebase > Configurações do Projeto > Geral.
+        window.firebaseConfig = {
+            apiKey: "AIzaSyDDNIBRwvoP9TzfBUdEKQMgYiMLIUotoWU",
+  authDomain: "flora-4b14c.firebaseapp.com",
+  projectId: "flora-4b14c",
+  storageBucket: "flora-4b14c.firebasestorage.app",
+  messagingSenderId: "356514736805",
+  appId: "1:356514736805:web:95c8230cc27d1b857a7b4c"
+};
         // Initialize Firebase
-        const app = initializeApp(firebaseConfig);
+        // @ts-ignore
+        const app = initializeApp(window.firebaseConfig);
+        // @ts-ignore
         window.db = getFirestore(app);
     </script>
 
@@ -52,7 +54,7 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
     "react/": "https://aistudiocdn.com/react@^19.1.1/",
     "recharts": "https://aistudiocdn.com/recharts@^3.2.1",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.2",
+    "react-router-dom": "https://esm.sh/react-router-dom@6",
     "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/"
   }
 }

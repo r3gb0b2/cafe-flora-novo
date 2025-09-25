@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { ReportType, Order } from '../types';
@@ -9,7 +8,7 @@ const { jsPDF } = window.jspdf;
 
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportType>(ReportType.Sales);
-  const { orders, waiters, products } = useData();
+  const { orders, waiters, products, tables } = useData();
   const closedOrders = orders.filter(o => o.status === 'closed');
 
   const handleExportPDF = () => {
@@ -24,7 +23,7 @@ const Reports: React.FC = () => {
             head = [['Data', 'Mesa', 'Garçom', 'Pagamento', 'Total']];
             body = closedOrders.map(o => [
                 new Date(o.closedAt!).toLocaleDateString('pt-BR'),
-                o.tableId,
+                tables.find(t => t.id === o.tableId)?.name || 'N/A',
                 waiters.find(w => w.id === o.waiterId)?.name || 'N/A',
                 o.paymentMethod,
                 `R$ ${o.total.toFixed(2)}`
@@ -181,4 +180,3 @@ const Reports: React.FC = () => {
 };
 
 export default Reports;
-   
