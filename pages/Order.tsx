@@ -20,6 +20,7 @@ const Order: React.FC = () => {
     removeOrderItem,
     closeTable,
     cancelOrder,
+    isLoading
   } = useData();
   
   const [isAddProductModalOpen, setAddProductModalOpen] = useState(false);
@@ -31,16 +32,16 @@ const Order: React.FC = () => {
   const table = getTableById(numericTableId);
   const order = getOpenOrderByTableId(numericTableId);
 
-  const handleCloseTable = () => {
+  const handleCloseTable = async () => {
     if (order) {
-      closeTable(order.id, paymentMethod);
+      await closeTable(order.id, paymentMethod);
       navigate('/tables');
     }
   };
 
-  const handleCancelOrder = () => {
+  const handleCancelOrder = async () => {
     if (order && window.confirm("Tem certeza que deseja cancelar este pedido? Todos os itens serão retornados ao estoque.")) {
-      cancelOrder(order.id);
+      await cancelOrder(order.id);
       navigate('/tables');
     }
   };
@@ -79,11 +80,12 @@ const Order: React.FC = () => {
                           min="1"
                           onChange={(e) => updateOrderItemQuantity(order.id, item.productId, parseInt(e.target.value, 10))}
                           className="w-16 text-center border rounded-md"
+                          disabled={isLoading}
                         />
                       </td>
                       <td className="py-3 text-right">R$ {(item.unitPrice * item.quantity).toFixed(2)}</td>
                       <td className="py-3 text-center">
-                        <button onClick={() => removeOrderItem(order.id, item.productId)} className="text-red-500 hover:text-red-700">
+                        <button onClick={() => removeOrderItem(order.id, item.productId)} className="text-red-500 hover:text-red-700 disabled:opacity-50" disabled={isLoading}>
                           <TrashIcon className="w-5 h-5"/>
                         </button>
                       </td>
@@ -99,14 +101,14 @@ const Order: React.FC = () => {
             <p className="text-gray-500 text-center py-8">Nenhum item adicionado a este pedido ainda.</p>
           )}
            <div className="mt-6 flex justify-between">
-            <Button onClick={() => setAddProductModalOpen(true)}>
+            <Button onClick={() => setAddProductModalOpen(true)} disabled={isLoading}>
               <PlusIcon className="w-5 h-5 inline-block mr-2" />
               Adicionar Produto
             </Button>
             {order && (
                <div className="space-x-2">
-                <Button variant="danger" onClick={handleCancelOrder}>Cancelar Pedido</Button>
-                <Button variant="primary" onClick={() => setCloseTableModalOpen(true)}>Fechar Mesa</Button>
+                <Button variant="danger" onClick={handleCancelOrder} disabled={isLoading}>Cancelar Pedido</Button>
+                <Button variant="primary" onClick={() => setCloseTableModalOpen(true)} disabled={isLoading}>Fechar Mesa</Button>
               </div>
             )}
           </div>
@@ -141,7 +143,7 @@ const Order: React.FC = () => {
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-sm text-gray-600">R$ {product.price.toFixed(2)} - Estoque: {product.stock}</p>
                     </div>
-                    <Button onClick={() => addProductToOrder(numericTableId, product, 'waiter_1')} disabled={product.stock <= 0}>
+                    <Button onClick={() => addProductToOrder(numericTableId, product, 'waiter_1')} disabled={product.stock <= 0 || isLoading}>
                        <PlusIcon className="w-5 h-5"/>
                     </Button>
                 </div>
@@ -159,6 +161,7 @@ const Order: React.FC = () => {
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
                     className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-brand-green-light focus:border-brand-green-light"
+                    disabled={isLoading}
                 >
                     <option>Cartão de Crédito</option>
                     <option>Cartão de Débito</option>
@@ -167,8 +170,10 @@ const Order: React.FC = () => {
                 </select>
             </div>
             <div className="flex justify-end space-x-3 pt-4">
-                <Button variant="secondary" onClick={() => setCloseTableModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleCloseTable}>Confirmar Pagamento</Button>
+                <Button variant="secondary" onClick={() => setCloseTableModalOpen(false)} disabled={isLoading}>Cancelar</Button>
+                <Button onClick={handleCloseTable} disabled={isLoading}>
+                  {isLoading ? 'Confirmando...' : 'Confirmar Pagamento'}
+                </Button>
             </div>
         </div>
       </Modal>
@@ -177,4 +182,3 @@ const Order: React.FC = () => {
 };
 
 export default Order;
-   

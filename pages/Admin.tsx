@@ -5,7 +5,7 @@ import Button from '../components/ui/Button';
 import { useData } from '../context/DataContext';
 
 const Admin: React.FC = () => {
-    const { tables, addTable, removeTable, orders, cancelOrder } = useData();
+    const { tables, addTable, removeTable, orders, cancelOrder, isLoading } = useData();
     const openOrders = orders.filter(o => o.status === 'open');
 
     return (
@@ -13,7 +13,7 @@ const Admin: React.FC = () => {
             <Card title="Gerenciamento de Mesas">
                 <div className="flex justify-between items-center mb-4">
                     <p className="text-gray-600">Total de mesas: {tables.length}</p>
-                    <Button onClick={addTable}>Adicionar Nova Mesa</Button>
+                    <Button onClick={addTable} disabled={isLoading}>Adicionar Nova Mesa</Button>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                     {tables.map(table => (
@@ -23,7 +23,7 @@ const Admin: React.FC = () => {
                                 variant="danger" 
                                 className="py-1 px-2 text-xs" 
                                 onClick={() => removeTable(table.id)}
-                                disabled={table.status !== 'Disponível'}
+                                disabled={table.status !== 'Disponível' || isLoading}
                                 title={table.status !== 'Disponível' ? 'Mesa em uso' : 'Remover mesa'}
                             >
                                 Remover
@@ -56,6 +56,7 @@ const Admin: React.FC = () => {
                                     <td className="p-3 text-center">
                                         <Button 
                                             variant="danger" 
+                                            disabled={isLoading}
                                             onClick={() => {
                                                 if(window.confirm(`Tem certeza que deseja cancelar o pedido da Mesa ${order.tableId}?`)){
                                                     cancelOrder(order.id)
@@ -82,4 +83,3 @@ const Admin: React.FC = () => {
 };
 
 export default Admin;
-   

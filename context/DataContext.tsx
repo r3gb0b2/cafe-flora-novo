@@ -8,27 +8,31 @@ interface DataContextType {
   tables: Table[];
   orders: Order[];
   waiters: Waiter[];
+  isLoading: boolean;
   getTableById: (id: number) => Table | undefined;
   getOpenOrderByTableId: (tableId: number) => Order | undefined;
-  addProductToOrder: (tableId: number, product: Product, waiterId: string) => void;
-  updateOrderItemQuantity: (orderId: string, productId: string, newQuantity: number) => void;
-  removeOrderItem: (orderId: string, productId: string) => void;
-  closeTable: (orderId: string, paymentMethod: string) => void;
-  updateProduct: (updatedProduct: Product) => void;
-  addProduct: (newProduct: Omit<Product, 'id'>) => void;
-  deleteProduct: (productId: string) => void;
-  addTable: () => void;
-  removeTable: (tableId: number) => void;
-  cancelOrder: (orderId: string) => void;
+  addProductToOrder: (tableId: number, product: Product, waiterId: string) => Promise<void>;
+  updateOrderItemQuantity: (orderId: string, productId: string, newQuantity: number) => Promise<void>;
+  removeOrderItem: (orderId: string, productId: string) => Promise<void>;
+  closeTable: (orderId: string, paymentMethod: string) => Promise<void>;
+  updateProduct: (updatedProduct: Product) => Promise<void>;
+  addProduct: (newProduct: Omit<Product, 'id'>) => Promise<void>;
+  deleteProduct: (productId: string) => Promise<void>;
+  addTable: () => Promise<void>;
+  removeTable: (tableId: number) => Promise<void>;
+  cancelOrder: (orderId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
+
+const API_LATENCY = 400;
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [tables, setTables] = useState<Table[]>(initialTables);
   const [orders, setOrders] = useState<Order[]>(initialOrders);
   const [waiters, setWaiters] = useState<Waiter[]>(initialWaiters);
+  const [isLoading, setIsLoading] = useState(false);
 
   const getTableById = useCallback((id: number) => tables.find(t => t.id === id), [tables]);
 
@@ -38,55 +42,59 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return orders.find(o => o.id === table.orderId && o.status === 'open');
   }, [tables, orders]);
   
-  const addProductToOrder = useCallback((tableId: number, product: Product, waiterId: string) => {
-      if (product.stock <= 0) {
-          alert("Produto fora de estoque!");
-          return;
-      }
-  
-      setTables(prevTables => prevTables.map(t => t.id === tableId ? { ...t, status: TableStatus.Occupied } : t));
-  
-      const openOrder = getOpenOrderByTableId(tableId);
-  
-      if (openOrder) {
-          setOrders(prevOrders => prevOrders.map(o => {
-              if (o.id === openOrder.id) {
-                  const existingItem = o.items.find(item => item.productId === product.id);
-                  let newItems: OrderItem[];
-                  if (existingItem) {
-                      newItems = o.items.map(item =>
-                          item.productId === product.id
-                              ? { ...item, quantity: item.quantity + 1 }
-                              : item
-                      );
-                  } else {
-                      newItems = [...o.items, { productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }];
-                  }
-                  const newTotal = newItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-                  return { ...o, items: newItems, total: newTotal };
-              }
-              return o;
-          }));
-      } else {
-          const newOrderId = `order_${Date.now()}`;
-          const newOrder: Order = {
-              id: newOrderId,
-              tableId,
-              waiterId,
-              items: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }],
-              total: product.price,
-              createdAt: new Date(),
-              status: 'open',
-          };
-          setOrders(prev => [...prev, newOrder]);
-          setTables(prev => prev.map(t => t.id === tableId ? { ...t, orderId: newOrderId, status: TableStatus.Occupied } : t));
-      }
+  const addProductToOrder = async (tableId: number, product: Product, waiterId: string) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
+    if (product.stock <= 0) {
+        alert("Produto fora de estoque!");
+        setIsLoading(false);
+        return;
+    }
 
-      setProducts(prevProducts => prevProducts.map(p => p.id === product.id ? {...p, stock: p.stock - 1} : p));
+    const openOrder = getOpenOrderByTableId(tableId);
 
-  }, [getOpenOrderByTableId]);
+    if (openOrder) {
+        setOrders(prevOrders => prevOrders.map(o => {
+            if (o.id === openOrder.id) {
+                const existingItem = o.items.find(item => item.productId === product.id);
+                let newItems: OrderItem[];
+                if (existingItem) {
+                    newItems = o.items.map(item =>
+                        item.productId === product.id
+                            ? { ...item, quantity: item.quantity + 1 }
+                            : item
+                    );
+                } else {
+                    newItems = [...o.items, { productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }];
+                }
+                const newTotal = newItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
+                return { ...o, items: newItems, total: newTotal };
+            }
+            return o;
+        }));
+    } else {
+        const newOrderId = `order_${Date.now()}`;
+        const newOrder: Order = {
+            id: newOrderId,
+            tableId,
+            waiterId,
+            items: [{ productId: product.id, productName: product.name, quantity: 1, unitPrice: product.price }],
+            total: product.price,
+            createdAt: new Date(),
+            status: 'open',
+        };
+        setOrders(prev => [...prev, newOrder]);
+        setTables(prev => prev.map(t => t.id === tableId ? { ...t, orderId: newOrderId, status: TableStatus.Occupied } : t));
+    }
 
-  const updateOrderItemQuantity = useCallback((orderId: string, productId: string, newQuantity: number) => {
+    setProducts(prevProducts => prevProducts.map(p => p.id === product.id ? {...p, stock: p.stock - 1} : p));
+    setTables(prevTables => prevTables.map(t => t.id === tableId ? { ...t, status: TableStatus.Occupied } : t));
+    setIsLoading(false);
+  };
+
+  const updateOrderItemQuantity = async (orderId: string, productId: string, newQuantity: number) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     let stockChange = 0;
 
     setOrders(prevOrders => prevOrders.map(o => {
@@ -106,14 +114,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (stockChange !== 0) {
         setProducts(prevProducts => prevProducts.map(p => p.id === productId ? {...p, stock: p.stock + stockChange} : p));
     }
+    setIsLoading(false);
+  };
 
-  }, []);
-
-  const removeOrderItem = (orderId: string, productId: string) => {
-    updateOrderItemQuantity(orderId, productId, 0);
+  const removeOrderItem = async (orderId: string, productId: string) => {
+    // This function calls another async function, so it doesn't need its own loading logic.
+    await updateOrderItemQuantity(orderId, productId, 0);
   };
   
-  const closeTable = useCallback((orderId: string, paymentMethod: string) => {
+  const closeTable = async (orderId: string, paymentMethod: string) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     let closedOrder: Order | undefined;
     setOrders(prevOrders => prevOrders.map(o => {
         if (o.id === orderId) {
@@ -130,25 +141,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               : t
       ));
     }
-  }, []);
-
-  const updateProduct = (updatedProduct: Product) => {
-    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    setIsLoading(false);
   };
 
-  const addProduct = (newProductData: Omit<Product, 'id'>) => {
+  const updateProduct = async (updatedProduct: Product) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
+    setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+    setIsLoading(false);
+  };
+
+  const addProduct = async (newProductData: Omit<Product, 'id'>) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     const newProduct: Product = {
       id: `prod_${Date.now()}`,
       ...newProductData
     };
     setProducts([...products, newProduct]);
+    setIsLoading(false);
   };
 
-  const deleteProduct = (productId: string) => {
+  const deleteProduct = async (productId: string) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     setProducts(products.filter(p => p.id !== productId));
+    setIsLoading(false);
   };
   
-  const addTable = () => {
+  const addTable = async () => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     const newId = tables.length > 0 ? Math.max(...tables.map(t => t.id)) + 1 : 1;
     const newTable: Table = {
       id: newId,
@@ -157,20 +180,30 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       orderId: null
     };
     setTables([...tables, newTable]);
+    setIsLoading(false);
   };
 
-  const removeTable = (tableId: number) => {
+  const removeTable = async (tableId: number) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
     const table = getTableById(tableId);
     if(table && table.status !== TableStatus.Available) {
       alert("Não é possível remover uma mesa que está em uso.");
+      setIsLoading(false);
       return;
     }
     setTables(tables.filter(t => t.id !== tableId));
+    setIsLoading(false);
   };
 
-  const cancelOrder = (orderId: string) => {
+  const cancelOrder = async (orderId: string) => {
+    setIsLoading(true);
+    await new Promise(res => setTimeout(res, API_LATENCY));
       const orderToCancel = orders.find(o => o.id === orderId);
-      if (!orderToCancel) return;
+      if (!orderToCancel) {
+        setIsLoading(false);
+        return;
+      }
 
       // Return items to stock
       orderToCancel.items.forEach(item => {
@@ -186,6 +219,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // Remove the order
       setOrders(prev => prev.filter(o => o.id !== orderId));
+      setIsLoading(false);
   };
 
 
@@ -194,6 +228,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     tables,
     orders,
     waiters,
+    isLoading,
     getTableById,
     getOpenOrderByTableId,
     addProductToOrder,
@@ -218,4 +253,3 @@ export const useData = (): DataContextType => {
   }
   return context;
 };
-   

@@ -7,7 +7,7 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 
 const Inventory: React.FC = () => {
-  const { products, addProduct, updateProduct, deleteProduct } = useData();
+  const { products, addProduct, updateProduct, deleteProduct, isLoading } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [newProduct, setNewProduct] = useState({ name: '', price: 0, stock: 0, category: '' });
@@ -27,18 +27,18 @@ const Inventory: React.FC = () => {
     setEditingProduct(null);
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (editingProduct) {
-      updateProduct({ ...editingProduct, ...newProduct });
+      await updateProduct({ ...editingProduct, ...newProduct });
     } else {
-      addProduct(newProduct);
+      await addProduct(newProduct);
     }
     handleCloseModal();
   };
   
-  const handleDelete = (productId: string) => {
+  const handleDelete = async (productId: string) => {
     if(window.confirm('Tem certeza que deseja remover este produto?')) {
-        deleteProduct(productId);
+        await deleteProduct(productId);
     }
   }
 
@@ -51,7 +51,7 @@ const Inventory: React.FC = () => {
     <Card>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-2xl font-semibold">Gerenciamento de Estoque</h2>
-        <Button onClick={() => handleOpenModal()}>Adicionar Produto</Button>
+        <Button onClick={() => handleOpenModal()} disabled={isLoading}>Adicionar Produto</Button>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -74,8 +74,8 @@ const Inventory: React.FC = () => {
                   <span className={`${product.stock < 20 ? 'text-red-500 font-semibold' : ''}`}>{product.stock}</span>
                 </td>
                 <td className="p-3 text-center space-x-2">
-                  <Button variant="secondary" onClick={() => handleOpenModal(product)} className="py-1 px-3">Editar</Button>
-                  <Button variant="danger" onClick={() => handleDelete(product.id)} className="py-1 px-3">Remover</Button>
+                  <Button variant="secondary" onClick={() => handleOpenModal(product)} className="py-1 px-3" disabled={isLoading}>Editar</Button>
+                  <Button variant="danger" onClick={() => handleDelete(product.id)} className="py-1 px-3" disabled={isLoading}>Remover</Button>
                 </td>
               </tr>
             ))}
@@ -87,11 +87,11 @@ const Inventory: React.FC = () => {
         <div className="space-y-4">
           <div>
             <label>Nome</label>
-            <input type="text" name="name" value={newProduct.name} onChange={handleChange} className="w-full p-2 border rounded" />
+            <input type="text" name="name" value={newProduct.name} onChange={handleChange} className="w-full p-2 border rounded" disabled={isLoading} />
           </div>
           <div>
             <label>Categoria</label>
-            <select name="category" value={newProduct.category} onChange={handleChange} className="w-full p-2 border rounded bg-white">
+            <select name="category" value={newProduct.category} onChange={handleChange} className="w-full p-2 border rounded bg-white" disabled={isLoading}>
                 <option value="Bebidas">Bebidas</option>
                 <option value="Salgados">Salgados</option>
                 <option value="Doces">Doces</option>
@@ -100,15 +100,17 @@ const Inventory: React.FC = () => {
           </div>
           <div>
             <label>Preço</label>
-            <input type="number" name="price" value={newProduct.price} onChange={handleChange} className="w-full p-2 border rounded" />
+            <input type="number" name="price" value={newProduct.price} onChange={handleChange} className="w-full p-2 border rounded" disabled={isLoading} />
           </div>
           <div>
             <label>Estoque</label>
-            <input type="number" name="stock" value={newProduct.stock} onChange={handleChange} className="w-full p-2 border rounded" />
+            <input type="number" name="stock" value={newProduct.stock} onChange={handleChange} className="w-full p-2 border rounded" disabled={isLoading} />
           </div>
           <div className="flex justify-end space-x-2 pt-4">
-             <Button variant="secondary" onClick={handleCloseModal}>Cancelar</Button>
-             <Button onClick={handleSaveProduct}>Salvar</Button>
+             <Button variant="secondary" onClick={handleCloseModal} disabled={isLoading}>Cancelar</Button>
+             <Button onClick={handleSaveProduct} disabled={isLoading}>
+                {isLoading ? 'Salvando...' : 'Salvar'}
+             </Button>
           </div>
         </div>
       </Modal>
@@ -117,4 +119,3 @@ const Inventory: React.FC = () => {
 };
 
 export default Inventory;
-   
