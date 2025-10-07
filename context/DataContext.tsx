@@ -64,7 +64,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setInitialLoad(prev => ({ ...prev, products: true }));
       },
       (error) => {
-        console.error("Firestore (products) error: ", error);
+        console.error("Firestore (products) error: ", error.message);
         alert("Não foi possível carregar os produtos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
       }
     );
@@ -85,7 +85,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setInitialLoad(prev => ({ ...prev, tables: true }));
       },
       (error) => {
-        console.error("Firestore (tables) error: ", error);
+        console.error("Firestore (tables) error: ", error.message);
         alert("Não foi possível carregar as mesas. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
       }
     );
@@ -111,7 +111,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setInitialLoad(prev => ({ ...prev, orders: true }));
       },
       (error) => {
-        console.error("Firestore (orders) error: ", error);
+        console.error("Firestore (orders) error: ", error.message);
         alert("Não foi possível carregar os pedidos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
       }
     );
@@ -171,7 +171,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             transaction.update(productRef, { stock: newStock });
         });
     } catch (e: any) {
-        console.error("Transaction failed: ", e);
+        console.error("Transaction failed: ", e.message);
         alert(e.message || "Não foi possível adicionar o item. Tente novamente.");
     } finally {
         setIsLoading(false);
@@ -206,7 +206,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             transaction.update(orderRef, { items: newItems, total: newTotal });
         });
     } catch (e: any) {
-        console.error("Transaction failed: ", e);
+        console.error("Transaction failed: ", e.message);
         alert(e.message || "Não foi possível atualizar o item.");
     } finally {
         setIsLoading(false);
@@ -230,7 +230,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         await batch.commit();
     } catch (e: any) {
-        console.error("Error closing table: ", e);
+        console.error("Error closing table: ", e.message);
         alert(e.message || "Não foi possível fechar a mesa.");
     } finally {
         setIsLoading(false);
@@ -249,7 +249,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           category: updatedProduct.category,
         };
         await updateDoc(productRef, dataToUpdate);
-    } catch (e) { console.error(e); alert("Falha ao atualizar produto."); }
+    } catch (e: any) { 
+      console.error("Falha ao atualizar produto:", e.message); 
+      alert("Falha ao atualizar produto."); 
+    }
     finally { setIsLoading(false); }
   };
 
@@ -257,7 +260,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       await addDoc(collection(db, 'products'), newProductData);
-    } catch (e) { console.error(e); alert("Falha ao adicionar produto."); }
+    } catch (e: any) { 
+      console.error("Falha ao adicionar produto:", e.message); 
+      alert("Falha ao adicionar produto."); 
+    }
     finally { setIsLoading(false); }
   };
 
@@ -265,7 +271,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
       await deleteDoc(doc(db, "products", productId));
-    } catch (e) { console.error(e); alert("Falha ao remover produto."); }
+    } catch (e: any) { 
+      console.error("Falha ao remover produto:", e.message); 
+      alert("Falha ao remover produto."); 
+    }
     finally { setIsLoading(false); }
   };
   
@@ -278,7 +287,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const newTableNumber = tablesSnapshot.size + 1;
         const newTableData = { name: `Mesa ${newTableNumber}`, status: TableStatus.Available, orderId: null };
         await addDoc(collection(db, 'tables'), newTableData);
-    } catch (e) { console.error(e); alert("Falha ao adicionar mesa."); }
+    } catch (e: any) { 
+      console.error("Falha ao adicionar mesa:", e.message); 
+      alert("Falha ao adicionar mesa."); 
+    }
     finally { setIsLoading(false); }
   };
 
@@ -290,7 +302,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error("Não é possível remover uma mesa que está em uso.");
       }
       await deleteDoc(doc(db, "tables", tableId));
-    } catch (e: any) { console.error(e); alert(e.message || "Falha ao remover mesa."); }
+    } catch (e: any) { 
+      console.error("Falha ao remover mesa:", e.message); 
+      alert(e.message || "Falha ao remover mesa."); 
+    }
     finally { setIsLoading(false); }
   };
 
@@ -322,7 +337,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             transaction.delete(orderRef);
         });
     } catch (e: any) {
-        console.error("Transaction failed: ", e);
+        console.error("Transaction failed: ", e.message);
         alert(e.message || "Não foi possível cancelar o pedido.");
     } finally {
         setIsLoading(false);
