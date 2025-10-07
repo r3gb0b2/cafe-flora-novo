@@ -1,10 +1,15 @@
 import React from 'react';
+import { useData } from '../context/DataContext';
 
 // @ts-ignore - Acessando a variável global definida no index.html
-const isConfigMissing = window.firebaseConfig && window.firebaseConfig.apiKey === 'AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU';
+const isPlaceholderConfig = window.firebaseConfig && window.firebaseConfig.apiKey === 'AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU';
 
 const FirebaseConfigWarning: React.FC = () => {
-    if (!isConfigMissing) {
+    const { firebaseStatus } = useData();
+
+    // Oculta o aviso se a configuração não for a de exemplo OU se uma conexão for estabelecida com sucesso.
+    // Isso evita que o aviso seja exibido se o aplicativo estiver realmente funcionando, resolvendo o problema do usuário.
+    if (!isPlaceholderConfig || firebaseStatus === 'connected') {
         return null;
     }
 

@@ -55,8 +55,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     for (const key in data) {
       if (Object.prototype.hasOwnProperty.call(data, key)) {
         const value = data[key];
-        // Convert Firestore Timestamps to JS Date objects
-        if (value instanceof Timestamp) {
+        // Convert Firestore Timestamps to JS Date objects using duck typing for reliability.
+        if (value && typeof value.toDate === 'function') {
           plainData[key] = value.toDate();
         } else {
           plainData[key] = value;
@@ -74,9 +74,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     const loadingTimeout = setTimeout(() => {
-        if (isLoading) {
+        // Only show a timeout error if we are still loading AND the status hasn't changed to 'connected'.
+        // This prevents a false positive error on slow connections that are actually working.
+        if (isLoading && firebaseStatus === 'connecting') {
             console.error("Firebase connection timed out after 15 seconds.");
-            setLoadingError("Não foi possível conectar ao banco de dados. Verifique sua conexão à internet e a configuração do Firebase no arquivo 'index.html'. Se o problema persistir, verifique as regras de segurança do seu projeto Firestore.");
+            setLoadingError("A conexão com o banco de dados está demorando mais que o esperado. Verifique sua conexão à internet e a configuração do Firebase no arquivo 'index.html'.");
             setIsLoading(false);
             setFirebaseStatus('error');
         }
@@ -167,14 +169,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                   const recalculatedTotal = sanitizedItems.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
                   console.warn(`Pedido ID ${doc.id} com total inválido:`, plainOrder.total, `- recalculado para ${recalculatedTotal.toFixed(2)}.`);
                   plainOrder.total = recalculatedTotal;
-              }
-
-              // Ensure date fields are valid Date objects
-              if (!(plainOrder.createdAt instanceof Date)) {
-                  plainOrder.createdAt = new Date();
-              }
-              if (plainOrder.closedAt && !(plainOrder.closedAt instanceof Date)) {
-                  plainOrder.closedAt = undefined;
               }
 
               return plainOrder as Order;
