@@ -47,7 +47,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false, waiters: false });
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('connecting');
-
+  
+  // Helper to safely convert Firestore docs to plain JS objects, preventing circular reference errors.
+  const processDoc = (doc: any) => {
+    const data = doc.data();
+    const plainData: { [key: string]: any } = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        const value = data[key];
+        // Convert Firestore Timestamps to JS Date objects
+        if (value instanceof Timestamp) {
+          plainData[key] = value.toDate();
+        } else {
+          plainData[key] = value;
+        }
+      }
+    }
+    return { id: doc.id, ...plainData };
+  };
 
   useEffect(() => {
      if (initialLoad.products && initialLoad.tables && initialLoad.orders && initialLoad.waiters) {
@@ -94,21 +111,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 (snapshot) => {
                     console.log(`Firestore update: Received ${snapshot.docs.length} ${collectionName}.`);
                     if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
-                    const data = snapshot.docs.map(doc => {
-                        const docData = doc.data();
-                        const plainObject: { [key: string]: any } = { id: doc.id };
-                        for (const key in docData) {
-                            if (Object.prototype.hasOwnProperty.call(docData, key)) {
-                                plainObject[key] = docData[key];
+                    
+                    const data = snapshot.docs.map(processDoc);
+                    
+                    if (collectionName === "products") {
+                        data.forEach((product: any) => {
+                            if (typeof product.price !== 'number') {
+                                console.warn(`Produto ID ${product.id} com preço inválido:`, product.price, `- usando 0 como padrão.`);
+                                product.price = 0;
                             }
-                        }
-                        return plainObject;
-                    });
+                            if (typeof product.stock !== 'number') {
+                                console.warn(`Produto ID ${product.id} com estoque inválido:`, product.stock, `- usando 0 como padrão.`);
+                                product.stock = 0;
+                            }
+                        });
+                    }
+
                     setter(data);
                     setInitialLoad(prev => ({ ...prev, [stateKey]: true }));
                 },
                 (error) => {
-                    console.error(`Firestore (${collectionName}) error: `, error);
+                    console.error(`Firestore (${collectionName}) error: `, error.message);
                     setFirebaseStatus('error');
                     const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
                     setLoadingError(`Erro ao carregar '${collectionName}'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
@@ -126,30 +149,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           (snapshot) => {
             console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
             if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
+            
             const ordersData = snapshot.docs.map(doc => {
-              const data = doc.data();
-              const plainOrder = {
-                  id: doc.id,
-                  tableId: data.tableId,
-                  items: data.items || [],
-                  total: data.total,
-                  waiterId: data.waiterId,
-                  paymentMethod: data.paymentMethod,
-                  status: data.status,
-                  createdAt: (data.createdAt && typeof data.createdAt.toDate === 'function')
-                      ? data.createdAt.toDate()
-                      : new Date(),
-                  closedAt: (data.closedAt && typeof data.closedAt.toDate === 'function')
-                      ? data.closedAt.toDate()
-                      : undefined,
-              };
+              const plainOrder: any = processDoc(doc);
+
+              // Sanitize order items to prevent crashes from bad data
+              const sanitizedItems: OrderItem[] = (Array.isArray(plainOrder.items) ? plainOrder.items : []).map((item: any) => ({
+                  productId: item.productId,
+                  productName: item.productName,
+                  quantity: typeof item.quantity === 'number' && item.quantity > 0 ? item.quantity : 1,
+                  unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : 0,
+              }));
+              plainOrder.items = sanitizedItems;
+
+              // If total is invalid, recalculate it from sanitized items
+              if (typeof plainOrder.total !== 'number') {
+                  const recalculatedTotal = sanitizedItems.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
+                  console.warn(`Pedido ID ${doc.id} com total inválido:`, plainOrder.total, `- recalculado para ${recalculatedTotal.toFixed(2)}.`);
+                  plainOrder.total = recalculatedTotal;
+              }
+
+              // Ensure date fields are valid Date objects
+              if (!(plainOrder.createdAt instanceof Date)) {
+                  plainOrder.createdAt = new Date();
+              }
+              if (plainOrder.closedAt && !(plainOrder.closedAt instanceof Date)) {
+                  plainOrder.closedAt = undefined;
+              }
+
               return plainOrder as Order;
             });
             setOrders(ordersData);
             setInitialLoad(prev => ({ ...prev, orders: true }));
           },
           (error) => {
-            console.error("Firestore (orders) error: ", error);
+            console.error("Firestore (orders) error: ", error.message);
             setFirebaseStatus('error');
             const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
             setLoadingError(`Erro ao carregar 'pedidos'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
