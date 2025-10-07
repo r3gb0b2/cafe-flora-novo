@@ -47,56 +47,74 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     console.log("Setting up Firestore listeners. If you don't see data, check your Firebase config in index.html and your Firestore security rules.");
     
-    const unsubProducts = onSnapshot(collection(db, "products"), (snapshot) => {
-      console.log(`Firestore update: Received ${snapshot.docs.length} products.`);
-      const productsData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-              id: doc.id,
-              name: data.name,
-              price: data.price,
-              stock: data.stock,
-              category: data.category,
-          } as Product;
-      });
-      setProducts(productsData);
-      setInitialLoad(prev => ({ ...prev, products: true }));
-    });
+    const unsubProducts = onSnapshot(collection(db, "products"), 
+      (snapshot) => {
+        console.log(`Firestore update: Received ${snapshot.docs.length} products.`);
+        const productsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name,
+                price: data.price,
+                stock: data.stock,
+                category: data.category,
+            } as Product;
+        });
+        setProducts(productsData);
+        setInitialLoad(prev => ({ ...prev, products: true }));
+      },
+      (error) => {
+        console.error("Firestore (products) error: ", error);
+        alert("Não foi possível carregar os produtos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
+      }
+    );
 
-    const unsubTables = onSnapshot(collection(db, "tables"), (snapshot) => {
-      console.log(`Firestore update: Received ${snapshot.docs.length} tables.`);
-      const tablesData = snapshot.docs.map(doc => {
+    const unsubTables = onSnapshot(collection(db, "tables"), 
+      (snapshot) => {
+        console.log(`Firestore update: Received ${snapshot.docs.length} tables.`);
+        const tablesData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name,
+                status: data.status,
+                orderId: data.orderId,
+            } as Table;
+        });
+        setTables(tablesData);
+        setInitialLoad(prev => ({ ...prev, tables: true }));
+      },
+      (error) => {
+        console.error("Firestore (tables) error: ", error);
+        alert("Não foi possível carregar as mesas. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
+      }
+    );
+    
+    const unsubOrders = onSnapshot(collection(db, "orders"), 
+      (snapshot) => {
+        console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
+        const ordersData = snapshot.docs.map(doc => {
           const data = doc.data();
           return {
               id: doc.id,
-              name: data.name,
+              tableId: data.tableId,
+              items: data.items,
+              total: data.total,
+              waiterId: data.waiterId,
+              createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+              closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
+              paymentMethod: data.paymentMethod,
               status: data.status,
-              orderId: data.orderId,
-          } as Table;
-      });
-      setTables(tablesData);
-      setInitialLoad(prev => ({ ...prev, tables: true }));
-    });
-    
-    const unsubOrders = onSnapshot(collection(db, "orders"), (snapshot) => {
-      console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
-      const ordersData = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            tableId: data.tableId,
-            items: data.items,
-            total: data.total,
-            waiterId: data.waiterId,
-            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-            closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
-            paymentMethod: data.paymentMethod,
-            status: data.status,
-        } as Order;
-      });
-      setOrders(ordersData);
-      setInitialLoad(prev => ({ ...prev, orders: true }));
-    });
+          } as Order;
+        });
+        setOrders(ordersData);
+        setInitialLoad(prev => ({ ...prev, orders: true }));
+      },
+      (error) => {
+        console.error("Firestore (orders) error: ", error);
+        alert("Não foi possível carregar os pedidos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
+      }
+    );
 
     return () => {
       unsubProducts();
@@ -223,8 +241,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
         const productRef = doc(db, "products", updatedProduct.id);
-        const { id, ...data } = updatedProduct;
-        await updateDoc(productRef, data);
+        // Explicitly create a clean object to prevent circular reference errors.
+        const dataToUpdate = {
+          name: updatedProduct.name,
+          price: updatedProduct.price,
+          stock: updatedProduct.stock,
+          category: updatedProduct.category,
+        };
+        await updateDoc(productRef, dataToUpdate);
     } catch (e) { console.error(e); alert("Falha ao atualizar produto."); }
     finally { setIsLoading(false); }
   };

@@ -1,7 +1,7 @@
 import React from 'react';
 
 // @ts-ignore - Acessando a variável global definida no index.html
-const isConfigMissing = window.firebaseConfig && window.firebaseConfig.apiKey === 'YOUR_API_KEY';
+const isConfigMissing = window.firebaseConfig && window.firebaseConfig.apiKey === 'AIzaSyDDNIBRwvoP9TzfBUdEKQMgYiMLIUotoWU';
 
 const FirebaseConfigWarning: React.FC = () => {
     if (!isConfigMissing) {
