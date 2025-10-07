@@ -7,6 +7,9 @@ import {
 
 // @ts-ignore
 const db = window.db;
+// @ts-ignore
+const isPlaceholderConfig = window.firebaseConfig && window.firebaseConfig.apiKey === 'AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU';
+
 
 type FirebaseStatus = 'connecting' | 'connected' | 'error';
 
@@ -38,6 +41,46 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// Helper to recursively convert Firestore data into plain, serializable objects.
+// This prevents "circular structure" errors when storing data in React state.
+const processDataRecursively = (data: any): any => {
+  if (data === null || typeof data !== 'object') {
+    return data;
+  }
+
+  // Robustly handle Firestore Timestamps and other date-like objects using duck typing.
+  if (typeof data.toDate === 'function') {
+    return data.toDate();
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(processDataRecursively);
+  }
+  
+  // Only recurse on plain objects to avoid traversing complex class instances.
+  if (Object.prototype.toString.call(data) === '[object Object]') {
+    const processedData: { [key: string]: any } = {};
+    for (const key in data) {
+      if (Object.prototype.hasOwnProperty.call(data, key)) {
+        processedData[key] = processDataRecursively(data[key]);
+      }
+    }
+    return processedData;
+  }
+  
+  // Return other object types (like already-converted Date objects) as-is.
+  return data;
+};
+
+
+// Converts a Firestore document snapshot into a plain, serializable JavaScript object.
+const processDoc = (doc: any) => {
+  const data = doc.data();
+  const processedData = processDataRecursively(data);
+  return { id: doc.id, ...processedData };
+};
+
+
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
@@ -48,24 +91,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false, waiters: false });
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('connecting');
   
-  // Helper to safely convert Firestore docs to plain JS objects, preventing circular reference errors.
-  const processDoc = (doc: any) => {
-    const data = doc.data();
-    const plainData: { [key: string]: any } = {};
-    for (const key in data) {
-      if (Object.prototype.hasOwnProperty.call(data, key)) {
-        const value = data[key];
-        // Convert Firestore Timestamps to JS Date objects using duck typing for reliability.
-        if (value && typeof value.toDate === 'function') {
-          plainData[key] = value.toDate();
-        } else {
-          plainData[key] = value;
-        }
-      }
-    }
-    return { id: doc.id, ...plainData };
-  };
-
   useEffect(() => {
      if (initialLoad.products && initialLoad.tables && initialLoad.orders && initialLoad.waiters) {
       setIsLoading(false);
@@ -73,12 +98,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [initialLoad]);
 
   useEffect(() => {
+    // Primeiro, verifique se a configuração do Firebase é a de exemplo.
+    // Se for, exiba um erro claro e não tente conectar.
+    if (isPlaceholderConfig) {
+      setLoadingError("AÇÃO NECESSÁRIA: A configuração do Firebase em `index.html` é um exemplo. Por favor, substitua pelas credenciais do seu projeto para que o aplicativo possa se conectar ao banco de dados.");
+      setIsLoading(false);
+      setFirebaseStatus('error');
+      return; // Interrompe a execução para evitar a tentativa de conexão.
+    }
+
     const loadingTimeout = setTimeout(() => {
-        // Only show a timeout error if we are still loading AND the status hasn't changed to 'connected'.
-        // This prevents a false positive error on slow connections that are actually working.
+        // Este timeout agora atua como um fallback para problemas de rede genuínos.
         if (isLoading && firebaseStatus === 'connecting') {
             console.error("Firebase connection timed out after 15 seconds.");
-            setLoadingError("A conexão com o banco de dados está demorando mais que o esperado. Verifique sua conexão à internet e a configuração do Firebase no arquivo 'index.html'.");
+            setLoadingError("A conexão com o banco de dados está demorando mais que o esperado. Verifique sua conexão à internet e as regras de segurança do Firestore.");
             setIsLoading(false);
             setFirebaseStatus('error');
         }
@@ -112,7 +145,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             const unsubscribe = onSnapshot(collection(db, collectionName),
                 (snapshot) => {
                     console.log(`Firestore update: Received ${snapshot.docs.length} ${collectionName}.`);
-                    if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
+                    if (firebaseStatus !== 'connected') setFirebaseStatus('connected');
                     
                     const data = snapshot.docs.map(processDoc);
                     
@@ -132,12 +165,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     setter(data);
                     setInitialLoad(prev => ({ ...prev, [stateKey]: true }));
                 },
-                (error) => {
-                    console.error(`Firestore (${collectionName}) error: `, error.message);
-                    setFirebaseStatus('error');
-                    const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
-                    setLoadingError(`Erro ao carregar '${collectionName}'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
-                    setIsLoading(false);
+                (error: any) => {
+                    if (error.code === 'permission-denied') {
+                        console.error(`Firestore (${collectionName}) PERMISSION ERROR: `, error.message);
+                        setFirebaseStatus('error');
+                        setLoadingError(`Acesso negado ao carregar '${collectionName}'. Verifique as regras de segurança do Firestore. Detalhes: ${error.message}`);
+                        setIsLoading(false);
+                    } else {
+                        console.warn(`Firestore (${collectionName}) connection issue: `, error.message);
+                        setFirebaseStatus('error');
+                    }
                 }
             );
             unsubscribers.push(unsubscribe);
@@ -150,12 +187,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const ordersUnsubscribe = onSnapshot(collection(db, "orders"), 
           (snapshot) => {
             console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
-            if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
+            if (firebaseStatus !== 'connected') setFirebaseStatus('connected');
             
             const ordersData = snapshot.docs.map(doc => {
               const plainOrder: any = processDoc(doc);
 
-              // Sanitize order items to prevent crashes from bad data
               const sanitizedItems: OrderItem[] = (Array.isArray(plainOrder.items) ? plainOrder.items : []).map((item: any) => ({
                   productId: item.productId,
                   productName: item.productName,
@@ -164,7 +200,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }));
               plainOrder.items = sanitizedItems;
 
-              // If total is invalid, recalculate it from sanitized items
               if (typeof plainOrder.total !== 'number') {
                   const recalculatedTotal = sanitizedItems.reduce((sum, i) => sum + (i.unitPrice * i.quantity), 0);
                   console.warn(`Pedido ID ${doc.id} com total inválido:`, plainOrder.total, `- recalculado para ${recalculatedTotal.toFixed(2)}.`);
@@ -176,12 +211,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setOrders(ordersData);
             setInitialLoad(prev => ({ ...prev, orders: true }));
           },
-          (error) => {
-            console.error("Firestore (orders) error: ", error.message);
-            setFirebaseStatus('error');
-            const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
-            setLoadingError(`Erro ao carregar 'pedidos'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
-            setIsLoading(false);
+          (error: any) => {
+            if (error.code === 'permission-denied') {
+                console.error("Firestore (orders) PERMISSION ERROR: ", error.message);
+                setFirebaseStatus('error');
+                setLoadingError(`Acesso negado ao carregar 'pedidos'. Verifique as regras de segurança do Firestore. Detalhes: ${error.message}`);
+                setIsLoading(false);
+            } else {
+                console.warn("Firestore (orders) connection issue: ", error.message);
+                setFirebaseStatus('error');
+            }
           }
         );
         unsubscribers.push(ordersUnsubscribe);
