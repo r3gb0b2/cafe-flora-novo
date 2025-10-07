@@ -16,6 +16,7 @@ interface DataContextType {
   orders: Order[];
   waiters: Waiter[];
   isLoading: boolean;
+  loadingError: string | null;
   firebaseStatus: FirebaseStatus;
   getTableById: (id: string) => Table | undefined;
   getOpenOrderByTableId: (tableId: string) => Order | undefined;
@@ -43,6 +44,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [orders, setOrders] = useState<Order[]>([]);
   const [waiters, setWaiters] = useState<Waiter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false, waiters: false });
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('connecting');
 
@@ -54,69 +56,86 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [initialLoad]);
 
   useEffect(() => {
-    const setupAndSeed = async () => {
-        try {
-            const seedIfNeeded = async (collectionName: string, seedData: any[]) => {
-                const snapshot = await getDocs(collection(db, collectionName));
-                if (snapshot.empty) {
-                    console.log(`Coleção '${collectionName}' vazia. Semeando com dados iniciais...`);
-                    const batch = writeBatch(db);
-                    seedData.forEach(item => {
-                        const docRef = doc(collection(db, collectionName));
-                        batch.set(docRef, item);
-                    });
-                    await batch.commit();
-                    console.log(`Dados iniciais para '${collectionName}' semeados com sucesso.`);
-                }
-            };
-            
-            await seedIfNeeded("products", seedProducts);
-            await seedIfNeeded("tables", seedTables);
-            await seedIfNeeded("waiters", seedWaiters);
-
-        } catch (error) {
-            console.error("Erro ao semear o banco de dados:", error);
+    const loadingTimeout = setTimeout(() => {
+        if (isLoading) {
+            console.error("Firebase connection timed out after 15 seconds.");
+            setLoadingError("Não foi possível conectar ao banco de dados. Verifique sua conexão à internet e a configuração do Firebase no arquivo 'index.html'. Se o problema persistir, verifique as regras de segurança do seu projeto Firestore.");
+            setIsLoading(false);
             setFirebaseStatus('error');
         }
+    }, 15000);
+
+    const unsubscribers: (() => void)[] = [];
+
+    const setupAndSeed = async () => {
+      try {
+        const seedIfNeeded = async (collectionName: string, seedData: any[]) => {
+            const snapshot = await getDocs(collection(db, collectionName));
+            if (snapshot.empty) {
+                console.log(`Coleção '${collectionName}' vazia. Semeando com dados iniciais...`);
+                const batch = writeBatch(db);
+                seedData.forEach(item => {
+                    const docRef = doc(collection(db, collectionName));
+                    batch.set(docRef, item);
+                });
+                await batch.commit();
+                console.log(`Dados iniciais para '${collectionName}' semeados com sucesso.`);
+            }
+        };
+        
+        await seedIfNeeded("products", seedProducts);
+        await seedIfNeeded("tables", seedTables);
+        await seedIfNeeded("waiters", seedWaiters);
 
         console.log("Setting up Firestore listeners. If you don't see data, check your Firebase config in index.html and your Firestore security rules.");
         
         const createListener = (collectionName: string, setter: Function, stateKey: string) => {
-            return onSnapshot(collection(db, collectionName),
+            const unsubscribe = onSnapshot(collection(db, collectionName),
                 (snapshot) => {
                     console.log(`Firestore update: Received ${snapshot.docs.length} ${collectionName}.`);
                     if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
-                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    const data = snapshot.docs.map(doc => {
+                        const docData = doc.data();
+                        const plainObject: { [key: string]: any } = { id: doc.id };
+                        for (const key in docData) {
+                            if (Object.prototype.hasOwnProperty.call(docData, key)) {
+                                plainObject[key] = docData[key];
+                            }
+                        }
+                        return plainObject;
+                    });
                     setter(data);
                     setInitialLoad(prev => ({ ...prev, [stateKey]: true }));
                 },
                 (error) => {
-                    console.error(`Firestore (${collectionName}) error: `, error.message);
+                    console.error(`Firestore (${collectionName}) error: `, error);
                     setFirebaseStatus('error');
+                    const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
+                    setLoadingError(`Erro ao carregar '${collectionName}'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
+                    setIsLoading(false);
                 }
             );
+            unsubscribers.push(unsubscribe);
         };
 
-        const unsubProducts = createListener("products", setProducts, "products");
-        const unsubTables = createListener("tables", setTables, "tables");
-        const unsubWaiters = createListener("waiters", setWaiters, "waiters");
+        createListener("products", setProducts, "products");
+        createListener("tables", setTables, "tables");
+        createListener("waiters", setWaiters, "waiters");
 
-        const unsubOrders = onSnapshot(collection(db, "orders"), 
+        const ordersUnsubscribe = onSnapshot(collection(db, "orders"), 
           (snapshot) => {
             console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
             if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
             const ordersData = snapshot.docs.map(doc => {
               const data = doc.data();
-              // Explicitly create a new plain object to guarantee no proxies or circular refs from Firestore's offline cache.
               const plainOrder = {
                   id: doc.id,
                   tableId: data.tableId,
-                  items: data.items || [], // Ensure items is an array
+                  items: data.items || [],
                   total: data.total,
                   waiterId: data.waiterId,
                   paymentMethod: data.paymentMethod,
                   status: data.status,
-                  // Safely convert Timestamps to Dates
                   createdAt: (data.createdAt && typeof data.createdAt.toDate === 'function')
                       ? data.createdAt.toDate()
                       : new Date(),
@@ -130,20 +149,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setInitialLoad(prev => ({ ...prev, orders: true }));
           },
           (error) => {
-            console.error("Firestore (orders) error: ", error.message);
+            console.error("Firestore (orders) error: ", error);
             setFirebaseStatus('error');
+            const errorMessage = (error && (error as any).message) ? String((error as any).message) : "Erro de conexão desconhecido.";
+            setLoadingError(`Erro ao carregar 'pedidos'. Verifique as regras de segurança do Firestore. Detalhes: ${errorMessage}`);
+            setIsLoading(false);
           }
         );
-
-        return () => {
-          unsubProducts();
-          unsubTables();
-          unsubOrders();
-          unsubWaiters();
-        };
+        unsubscribers.push(ordersUnsubscribe);
+      } catch (error: any) {
+        console.error("Erro fatal durante a inicialização do Firestore:", error);
+        setFirebaseStatus('error');
+        const errorMessage = (error && error.message) ? String(error.message) : "Ocorreu um erro inesperado.";
+        setLoadingError(`Não foi possível inicializar o banco de dados. Verifique a configuração do Firebase e as regras de segurança. Detalhes: ${errorMessage}`);
+        setIsLoading(false);
+      }
     };
     
     setupAndSeed();
+
+    return () => {
+      clearTimeout(loadingTimeout);
+      unsubscribers.forEach(unsub => unsub());
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -441,7 +469,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const value = { products, tables, orders, waiters, isLoading, firebaseStatus, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder, addWaiter, updateWaiter, deleteWaiter, seedDatabase };
+  const value = { products, tables, orders, waiters, isLoading, loadingError, firebaseStatus, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder, addWaiter, updateWaiter, deleteWaiter, seedDatabase };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

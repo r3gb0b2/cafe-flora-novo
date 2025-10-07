@@ -43,9 +43,12 @@ const Order: React.FC = () => {
   }, [order, waiters]);
 
   const handleCloseTable = async () => {
-    if (order) {
-      await closeTable(order.id, paymentMethod);
-      navigate('/tables');
+    if (order && table) {
+      const confirmationMessage = `Você tem certeza que deseja fechar o pedido da ${table.name}?\n\nTotal a pagar: R$ ${order.total.toFixed(2)}\nForma de Pagamento: ${paymentMethod}`;
+      if (window.confirm(confirmationMessage)) {
+        await closeTable(order.id, paymentMethod);
+        navigate('/tables');
+      }
     }
   };
 
