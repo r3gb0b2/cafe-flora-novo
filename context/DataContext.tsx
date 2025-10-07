@@ -9,9 +9,17 @@ import {
 const db = window.db;
 // @ts-ignore
 const isPlaceholderConfig = window.firebaseConfig && window.firebaseConfig.apiKey === 'AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU';
+// @ts-ignore
+const projectId = window.firebaseConfig?.projectId;
 
 
 type FirebaseStatus = 'connecting' | 'connected' | 'error';
+
+export interface LoadingError {
+  type: 'permission-denied' | 'timeout' | 'config' | 'generic';
+  message: string;
+  projectId?: string;
+}
 
 interface DataContextType {
   products: Product[];
@@ -19,7 +27,7 @@ interface DataContextType {
   orders: Order[];
   waiters: Waiter[];
   isLoading: boolean;
-  loadingError: string | null;
+  loadingError: LoadingError | null;
   firebaseStatus: FirebaseStatus;
   getTableById: (id: string) => Table | undefined;
   getOpenOrderByTableId: (tableId: string) => Order | undefined;
@@ -87,7 +95,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [orders, setOrders] = useState<Order[]>([]);
   const [waiters, setWaiters] = useState<Waiter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [loadingError, setLoadingError] = useState<LoadingError | null>(null);
   const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false, waiters: false });
   const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('connecting');
   
@@ -101,7 +109,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Primeiro, verifique se a configuração do Firebase é a de exemplo.
     // Se for, exiba um erro claro e não tente conectar.
     if (isPlaceholderConfig) {
-      setLoadingError("AÇÃO NECESSÁRIA: A configuração do Firebase em `index.html` é um exemplo. Por favor, substitua pelas credenciais do seu projeto para que o aplicativo possa se conectar ao banco de dados.");
+      setLoadingError({
+        type: 'config',
+        message: "A configuração do Firebase em `index.html` é um exemplo. Por favor, substitua pelas credenciais do seu projeto para que o aplicativo possa se conectar ao banco de dados."
+      });
       setIsLoading(false);
       setFirebaseStatus('error');
       return; // Interrompe a execução para evitar a tentativa de conexão.
@@ -111,7 +122,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Este timeout agora atua como um fallback para problemas de rede genuínos.
         if (isLoading && firebaseStatus === 'connecting') {
             console.error("Firebase connection timed out after 15 seconds.");
-            setLoadingError("A conexão com o banco de dados está demorando mais que o esperado. Verifique sua conexão à internet e as regras de segurança do Firestore.");
+            setLoadingError({
+              type: 'timeout',
+              message: "A conexão com o banco de dados está demorando mais que o esperado. Verifique sua conexão à internet e as regras de segurança do Firestore."
+            });
             setIsLoading(false);
             setFirebaseStatus('error');
         }
@@ -169,7 +183,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                     if (error.code === 'permission-denied') {
                         console.error(`Firestore (${collectionName}) PERMISSION ERROR: `, error.message);
                         setFirebaseStatus('error');
-                        setLoadingError(`Acesso negado ao carregar '${collectionName}'. Verifique as regras de segurança do Firestore. Detalhes: ${error.message}`);
+                        setLoadingError({
+                          type: 'permission-denied',
+                          message: `O acesso à coleção '${collectionName}' foi negado. Isso geralmente é causado por regras de segurança do Firestore.`,
+                          projectId
+                        });
                         setIsLoading(false);
                     } else {
                         console.warn(`Firestore (${collectionName}) connection issue: `, error.message);
@@ -215,7 +233,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (error.code === 'permission-denied') {
                 console.error("Firestore (orders) PERMISSION ERROR: ", error.message);
                 setFirebaseStatus('error');
-                setLoadingError(`Acesso negado ao carregar 'pedidos'. Verifique as regras de segurança do Firestore. Detalhes: ${error.message}`);
+                setLoadingError({
+                  type: 'permission-denied',
+                  message: `O acesso à coleção 'orders' foi negado. Isso geralmente é causado por regras de segurança do Firestore.`,
+                  projectId
+                });
                 setIsLoading(false);
             } else {
                 console.warn("Firestore (orders) connection issue: ", error.message);
@@ -228,7 +250,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error("Erro fatal durante a inicialização do Firestore:", error);
         setFirebaseStatus('error');
         const errorMessage = (error && error.message) ? String(error.message) : "Ocorreu um erro inesperado.";
-        setLoadingError(`Não foi possível inicializar o banco de dados. Verifique a configuração do Firebase e as regras de segurança. Detalhes: ${errorMessage}`);
+        setLoadingError({
+          type: 'generic',
+          message: `Não foi possível inicializar o banco de dados. Verifique a configuração do Firebase e as regras de segurança. Detalhes: ${errorMessage}`
+        });
         setIsLoading(false);
       }
     };
