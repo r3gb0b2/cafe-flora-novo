@@ -32,6 +32,7 @@ interface DataContextType {
   addWaiter: (name: string) => Promise<void>;
   updateWaiter: (waiter: Waiter) => Promise<void>;
   deleteWaiter: (waiterId: string) => Promise<void>;
+  seedDatabase: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -388,7 +389,52 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     finally { setIsLoading(false); }
   };
 
-  const value = { products, tables, orders, waiters, isLoading, firebaseStatus, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder, addWaiter, updateWaiter, deleteWaiter };
+  const seedDatabase = async () => {
+    if (!window.confirm("Você tem certeza? Esta ação irá apagar TODOS os produtos, mesas e garçons existentes e substituí-los por dados de exemplo. Pedidos não serão afetados.")) {
+        return;
+    }
+    setIsLoading(true);
+    try {
+        const deleteCollection = async (collectionName: string) => {
+            const collectionRef = collection(db, collectionName);
+            const snapshot = await getDocs(collectionRef);
+            if (snapshot.empty) return;
+            const batch = writeBatch(db);
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+            });
+            await batch.commit();
+            console.log(`Collection '${collectionName}' cleared.`);
+        };
+
+        const seedCollection = async (collectionName: string, seedData: any[]) => {
+            const batch = writeBatch(db);
+            seedData.forEach(item => {
+                const docRef = doc(collection(db, collectionName));
+                batch.set(docRef, item);
+            });
+            await batch.commit();
+            console.log(`Collection '${collectionName}' seeded.`);
+        };
+
+        await deleteCollection("products");
+        await deleteCollection("tables");
+        await deleteCollection("waiters");
+
+        await seedCollection("products", seedProducts);
+        await seedCollection("tables", seedTables);
+        await seedCollection("waiters", seedWaiters);
+
+        alert("Banco de dados populado com sucesso!");
+    } catch (e: any) {
+        console.error("Falha ao popular banco de dados:", e.message);
+        alert("Ocorreu um erro ao popular o banco de dados. Verifique o console para mais detalhes.");
+    } finally {
+        setIsLoading(false);
+    }
+  };
+
+  const value = { products, tables, orders, waiters, isLoading, firebaseStatus, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder, addWaiter, updateWaiter, deleteWaiter, seedDatabase };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

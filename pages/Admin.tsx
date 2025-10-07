@@ -10,7 +10,8 @@ const Admin: React.FC = () => {
         tables, addTable, removeTable, 
         orders, cancelOrder, 
         waiters, addWaiter, updateWaiter, deleteWaiter,
-        isLoading 
+        isLoading,
+        seedDatabase 
     } = useData();
 
     const openOrders = orders.filter(o => o.status === 'open');
@@ -170,6 +171,25 @@ const Admin: React.FC = () => {
                     </div>
                 </div>
             </Modal>
+
+            <Card title="Gerenciamento de Dados">
+                <div className="space-y-4">
+                    <p className="text-gray-600">
+                        Use esta opção para restaurar os dados iniciais do sistema. Isso é útil para testes ou se você limpou o banco de dados e deseja começar de novo com os dados de exemplo.
+                    </p>
+                    <div className="p-4 bg-yellow-50 border-l-4 border-yellow-400 text-yellow-700 rounded-r-lg">
+                        <p className="font-bold">Atenção!</p>
+                        <p>Esta ação irá <span className="font-semibold">apagar permanentemente</span> todos os produtos, mesas e garçons cadastrados e substituí-los por um conjunto de dados de exemplo. Pedidos existentes não serão afetados.</p>
+                    </div>
+                    <Button 
+                        variant="danger" 
+                        onClick={seedDatabase}
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'Processando...' : 'Popular Banco de Dados com Dados Iniciais'}
+                    </Button>
+                </div>
+            </Card>
         </div>
     );
 };
