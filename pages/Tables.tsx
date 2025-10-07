@@ -48,8 +48,7 @@ const Tables: React.FC = () => {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-      {/* FIX: The table `id` is a string, on which arithmetic operations are not allowed. Sorting by table name numerically is more intuitive. */}
-      {tables.sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(table => (
+      {[...tables].sort((a,b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map(table => (
         <TableCard key={table.id} table={table} />
       ))}
     </div>

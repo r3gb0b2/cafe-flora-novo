@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="pt-br">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF--8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale-1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VerdeCafé - Sistema de Gestão</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -33,13 +33,15 @@
         // ATENÇÃO: Substitua os valores abaixo pelas credenciais do SEU projeto Firebase.
         // Você pode encontrá-las no Console do Firebase > Configurações do Projeto > Geral.
         window.firebaseConfig = {
-            apiKey: "AIzaSyDDNIBRwvoP9TzfBUdEKQMgYiMLIUotoWU",
+          apiKey: "AIzaSyDDNIBRwvoP9TzfBUdEKQMgYiMLIUotoWU",
   authDomain: "flora-4b14c.firebaseapp.com",
   projectId: "flora-4b14c",
   storageBucket: "flora-4b14c.firebasestorage.app",
   messagingSenderId: "356514736805",
   appId: "1:356514736805:web:95c8230cc27d1b857a7b4c"
 };
+
+        };
         // Initialize Firebase
         // @ts-ignore
         const app = initializeApp(window.firebaseConfig);
@@ -55,11 +57,11 @@
     "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
     "react-dom/": "https://esm.sh/react-dom@18.2.0/",
     "react/": "https://esm.sh/react@18.2.0/",
-    "recharts": "https://esm.sh/recharts@2.12.7?pin=v135&deps=react@18.2.0",
-    "react-router-dom": "https://esm.sh/react-router-dom@6?deps=react@18.2.0",
+    "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.2.0,react-dom@18.2.0",
+    "react-router-dom": "https://esm.sh/react-router-dom@6?deps=react@18.2.0,react-dom@18.2.0",
     "@heroicons/react/24/outline": "https://esm.sh/@heroicons/react@2.1.3/24/outline?deps=react@18.2.0",
     "@heroicons/react/24/solid": "https://esm.sh/@heroicons/react@2.1.3/24/solid?deps=react@18.2.0",
-    "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/"
+    "@heroicons/react/": "https://esm.sh/@heroicons/react@2.1.3/?deps=react@18.2.0"
   }
 }
 </script>
