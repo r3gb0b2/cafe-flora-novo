@@ -1,11 +1,55 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
+import Modal from '../components/ui/Modal';
 import { useData } from '../context/DataContext';
+import { Waiter } from '../types';
 
 const Admin: React.FC = () => {
-    const { tables, addTable, removeTable, orders, cancelOrder, isLoading } = useData();
+    const { 
+        tables, addTable, removeTable, 
+        orders, cancelOrder, 
+        waiters, addWaiter, updateWaiter, deleteWaiter,
+        isLoading 
+    } = useData();
+
     const openOrders = orders.filter(o => o.status === 'open');
+
+    // State for waiter management
+    const [isWaiterModalOpen, setIsWaiterModalOpen] = useState(false);
+    const [editingWaiter, setEditingWaiter] = useState<Waiter | null>(null);
+    const [waiterName, setWaiterName] = useState('');
+
+    const handleOpenWaiterModal = (waiter: Waiter | null = null) => {
+        setEditingWaiter(waiter);
+        setWaiterName(waiter ? waiter.name : '');
+        setIsWaiterModalOpen(true);
+    };
+
+    const handleCloseWaiterModal = () => {
+        setIsWaiterModalOpen(false);
+        setEditingWaiter(null);
+        setWaiterName('');
+    };
+
+    const handleSaveWaiter = async () => {
+        if (!waiterName.trim()) {
+            alert("O nome do garçom não pode estar vazio.");
+            return;
+        }
+        if (editingWaiter) {
+            await updateWaiter({ ...editingWaiter, name: waiterName });
+        } else {
+            await addWaiter(waiterName);
+        }
+        handleCloseWaiterModal();
+    };
+
+    const handleDeleteWaiter = async (waiterId: string) => {
+        if (window.confirm("Tem certeza que deseja remover este garçom?")) {
+            await deleteWaiter(waiterId);
+        }
+    };
 
     return (
         <div className="space-y-6">
@@ -29,6 +73,34 @@ const Admin: React.FC = () => {
                             </Button>
                         </div>
                     ))}
+                </div>
+            </Card>
+
+            <Card title="Gerenciamento de Garçons">
+                <div className="flex justify-between items-center mb-4">
+                    <p className="text-gray-600">Total de garçons: {waiters.length}</p>
+                    <Button onClick={() => handleOpenWaiterModal()} disabled={isLoading}>Adicionar Garçom</Button>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-gray-100">
+                                <th className="p-3">Nome</th>
+                                <th className="p-3 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {waiters.map(waiter => (
+                                <tr key={waiter.id} className="border-b hover:bg-gray-50">
+                                    <td className="p-3">{waiter.name}</td>
+                                    <td className="p-3 text-center space-x-2">
+                                        <Button variant="secondary" onClick={() => handleOpenWaiterModal(waiter)} className="py-1 px-3" disabled={isLoading}>Editar</Button>
+                                        <Button variant="danger" onClick={() => handleDeleteWaiter(waiter.id)} className="py-1 px-3" disabled={isLoading}>Remover</Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
             </Card>
 
@@ -76,9 +148,28 @@ const Admin: React.FC = () => {
                 )}
             </Card>
 
-            <Card title="Formas de Pagamento">
-                <p className="text-gray-600">Gerencie as formas de pagamento aceitas. (Funcionalidade a ser implementada)</p>
-            </Card>
+            <Modal isOpen={isWaiterModalOpen} onClose={handleCloseWaiterModal} title={editingWaiter ? 'Editar Garçom' : 'Adicionar Garçom'}>
+                <div className="space-y-4">
+                    <div>
+                        <label htmlFor="waiterName" className="block text-sm font-medium text-gray-700">Nome do Garçom</label>
+                        <input 
+                            type="text" 
+                            id="waiterName"
+                            value={waiterName} 
+                            onChange={(e) => setWaiterName(e.target.value)} 
+                            className="mt-1 w-full p-2 border rounded-md shadow-sm" 
+                            disabled={isLoading} 
+                            autoFocus
+                        />
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-4">
+                        <Button variant="secondary" onClick={handleCloseWaiterModal} disabled={isLoading}>Cancelar</Button>
+                        <Button onClick={handleSaveWaiter} disabled={isLoading}>
+                            {isLoading ? 'Salvando...' : 'Salvar'}
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
         </div>
     );
 };

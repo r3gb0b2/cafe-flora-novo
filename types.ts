@@ -43,6 +43,12 @@ export interface Waiter {
   name: string;
 }
 
+export interface PaymentMethod {
+    id: string;
+    name: string;
+    enabled: boolean;
+}
+
 export enum ReportType {
     Sales = 'Vendas',
     Products = 'Produtos',

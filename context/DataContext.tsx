@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { Product, Table, TableStatus, Order, OrderItem, Waiter } from '../types';
-import { initialWaiters } from '../services/firebase';
+import { seedProducts, seedTables, seedWaiters } from '../services/seedData';
 import { 
   getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp, Timestamp, getDocs, writeBatch, query, where, getDoc 
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -8,12 +8,15 @@ import {
 // @ts-ignore
 const db = window.db;
 
+type FirebaseStatus = 'connecting' | 'connected' | 'error';
+
 interface DataContextType {
   products: Product[];
   tables: Table[];
   orders: Order[];
   waiters: Waiter[];
   isLoading: boolean;
+  firebaseStatus: FirebaseStatus;
   getTableById: (id: string) => Table | undefined;
   getOpenOrderByTableId: (tableId: string) => Order | undefined;
   addProductToOrder: (tableId: string, product: Product, waiterId: string) => Promise<void>;
@@ -26,6 +29,9 @@ interface DataContextType {
   addTable: () => Promise<void>;
   removeTable: (tableId: string) => Promise<void>;
   cancelOrder: (orderId: string) => Promise<void>;
+  addWaiter: (name: string) => Promise<void>;
+  updateWaiter: (waiter: Waiter) => Promise<void>;
+  deleteWaiter: (waiterId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -34,93 +40,103 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [products, setProducts] = useState<Product[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [waiters, setWaiters] = useState<Waiter[]>(initialWaiters);
+  const [waiters, setWaiters] = useState<Waiter[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false });
+  const [initialLoad, setInitialLoad] = useState({ products: false, tables: false, orders: false, waiters: false });
+  const [firebaseStatus, setFirebaseStatus] = useState<FirebaseStatus>('connecting');
+
 
   useEffect(() => {
-     if (initialLoad.products && initialLoad.tables && initialLoad.orders) {
+     if (initialLoad.products && initialLoad.tables && initialLoad.orders && initialLoad.waiters) {
       setIsLoading(false);
     }
   }, [initialLoad]);
 
   useEffect(() => {
-    console.log("Setting up Firestore listeners. If you don't see data, check your Firebase config in index.html and your Firestore security rules.");
-    
-    const unsubProducts = onSnapshot(collection(db, "products"), 
-      (snapshot) => {
-        console.log(`Firestore update: Received ${snapshot.docs.length} products.`);
-        const productsData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                name: data.name,
-                price: data.price,
-                stock: data.stock,
-                category: data.category,
-            } as Product;
-        });
-        setProducts(productsData);
-        setInitialLoad(prev => ({ ...prev, products: true }));
-      },
-      (error) => {
-        console.error("Firestore (products) error: ", error.message);
-        alert("Não foi possível carregar os produtos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
-      }
-    );
+    const setupAndSeed = async () => {
+        try {
+            const seedIfNeeded = async (collectionName: string, seedData: any[]) => {
+                const snapshot = await getDocs(collection(db, collectionName));
+                if (snapshot.empty) {
+                    console.log(`Coleção '${collectionName}' vazia. Semeando com dados iniciais...`);
+                    const batch = writeBatch(db);
+                    seedData.forEach(item => {
+                        const docRef = doc(collection(db, collectionName));
+                        batch.set(docRef, item);
+                    });
+                    await batch.commit();
+                    console.log(`Dados iniciais para '${collectionName}' semeados com sucesso.`);
+                }
+            };
+            
+            await seedIfNeeded("products", seedProducts);
+            await seedIfNeeded("tables", seedTables);
+            await seedIfNeeded("waiters", seedWaiters);
 
-    const unsubTables = onSnapshot(collection(db, "tables"), 
-      (snapshot) => {
-        console.log(`Firestore update: Received ${snapshot.docs.length} tables.`);
-        const tablesData = snapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                name: data.name,
-                status: data.status,
-                orderId: data.orderId,
-            } as Table;
-        });
-        setTables(tablesData);
-        setInitialLoad(prev => ({ ...prev, tables: true }));
-      },
-      (error) => {
-        console.error("Firestore (tables) error: ", error.message);
-        alert("Não foi possível carregar as mesas. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
-      }
-    );
-    
-    const unsubOrders = onSnapshot(collection(db, "orders"), 
-      (snapshot) => {
-        console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
-        const ordersData = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-              id: doc.id,
-              tableId: data.tableId,
-              items: data.items,
-              total: data.total,
-              waiterId: data.waiterId,
-              createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-              closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
-              paymentMethod: data.paymentMethod,
-              status: data.status,
-          } as Order;
-        });
-        setOrders(ordersData);
-        setInitialLoad(prev => ({ ...prev, orders: true }));
-      },
-      (error) => {
-        console.error("Firestore (orders) error: ", error.message);
-        alert("Não foi possível carregar os pedidos. Verifique suas regras de segurança do Firestore e a conexão com a internet.");
-      }
-    );
+        } catch (error) {
+            console.error("Erro ao semear o banco de dados:", error);
+            setFirebaseStatus('error');
+        }
 
-    return () => {
-      unsubProducts();
-      unsubTables();
-      unsubOrders();
+        console.log("Setting up Firestore listeners. If you don't see data, check your Firebase config in index.html and your Firestore security rules.");
+        
+        const createListener = (collectionName: string, setter: Function, stateKey: string) => {
+            return onSnapshot(collection(db, collectionName),
+                (snapshot) => {
+                    console.log(`Firestore update: Received ${snapshot.docs.length} ${collectionName}.`);
+                    if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
+                    const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    setter(data);
+                    setInitialLoad(prev => ({ ...prev, [stateKey]: true }));
+                },
+                (error) => {
+                    console.error(`Firestore (${collectionName}) error: `, error.message);
+                    setFirebaseStatus('error');
+                }
+            );
+        };
+
+        const unsubProducts = createListener("products", setProducts, "products");
+        const unsubTables = createListener("tables", setTables, "tables");
+        const unsubWaiters = createListener("waiters", setWaiters, "waiters");
+
+        const unsubOrders = onSnapshot(collection(db, "orders"), 
+          (snapshot) => {
+            console.log(`Firestore update: Received ${snapshot.docs.length} orders.`);
+            if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
+            const ordersData = snapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                  id: doc.id,
+                  tableId: data.tableId,
+                  items: data.items,
+                  total: data.total,
+                  waiterId: data.waiterId,
+                  createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+                  closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
+                  paymentMethod: data.paymentMethod,
+                  status: data.status,
+              } as Order;
+            });
+            setOrders(ordersData);
+            setInitialLoad(prev => ({ ...prev, orders: true }));
+          },
+          (error) => {
+            console.error("Firestore (orders) error: ", error.message);
+            setFirebaseStatus('error');
+          }
+        );
+
+        return () => {
+          unsubProducts();
+          unsubTables();
+          unsubOrders();
+          unsubWaiters();
+        };
     };
+    
+    setupAndSeed();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const getTableById = useCallback((id: string) => tables.find(t => t.id === id), [tables]);
@@ -241,7 +257,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     try {
         const productRef = doc(db, "products", updatedProduct.id);
-        // Explicitly create a clean object to prevent circular reference errors.
         const dataToUpdate = {
           name: updatedProduct.name,
           price: updatedProduct.price,
@@ -281,7 +296,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addTable = async () => {
     setIsLoading(true);
     try {
-        // Fetch current table count to avoid race conditions with local state
         const tablesCollectionRef = collection(db, 'tables');
         const tablesSnapshot = await getDocs(tablesCollectionRef);
         const newTableNumber = tablesSnapshot.size + 1;
@@ -319,7 +333,6 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
             const orderData = orderDoc.data();
 
-            // Return items to stock
             for (const item of orderData.items) {
                 const productRef = doc(db, 'products', item.productId);
                 const productDoc = await transaction.get(productRef);
@@ -329,11 +342,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 }
             }
 
-            // Free up the table
             const tableRef = doc(db, 'tables', orderData.tableId);
             transaction.update(tableRef, { status: TableStatus.Available, orderId: null });
-
-            // Delete the order
             transaction.delete(orderRef);
         });
     } catch (e: any) {
@@ -343,9 +353,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false);
     }
   };
+  
+  const addWaiter = async (name: string) => {
+    setIsLoading(true);
+    try {
+      await addDoc(collection(db, 'waiters'), { name });
+    } catch (e: any) { 
+      console.error("Falha ao adicionar garçom:", e.message); 
+      alert("Falha ao adicionar garçom."); 
+    }
+    finally { setIsLoading(false); }
+  };
 
+  const updateWaiter = async (waiter: Waiter) => {
+    setIsLoading(true);
+    try {
+      const waiterRef = doc(db, "waiters", waiter.id);
+      await updateDoc(waiterRef, { name: waiter.name });
+    } catch (e: any) { 
+      console.error("Falha ao atualizar garçom:", e.message); 
+      alert("Falha ao atualizar garçom."); 
+    }
+    finally { setIsLoading(false); }
+  };
 
-  const value = { products, tables, orders, waiters, isLoading, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder };
+  const deleteWaiter = async (waiterId: string) => {
+    setIsLoading(true);
+    try {
+      await deleteDoc(doc(db, "waiters", waiterId));
+    } catch (e: any) { 
+      console.error("Falha ao remover garçom:", e.message); 
+      alert("Falha ao remover garçom."); 
+    }
+    finally { setIsLoading(false); }
+  };
+
+  const value = { products, tables, orders, waiters, isLoading, firebaseStatus, getTableById, getOpenOrderByTableId, addProductToOrder, updateOrderItemQuantity, removeOrderItem, closeTable, updateProduct, addProduct, deleteProduct, addTable, removeTable, cancelOrder, addWaiter, updateWaiter, deleteWaiter };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };

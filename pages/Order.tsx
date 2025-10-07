@@ -5,7 +5,7 @@ import { Product } from '../types';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/solid';
+import { PlusIcon, TrashIcon, UserIcon } from '@heroicons/react/24/solid';
 
 const Order: React.FC = () => {
   const { tableId } = useParams<{ tableId: string }>();
@@ -14,6 +14,7 @@ const Order: React.FC = () => {
     getTableById,
     getOpenOrderByTableId,
     products,
+    waiters,
     addProductToOrder,
     updateOrderItemQuantity,
     removeOrderItem,
@@ -24,6 +25,8 @@ const Order: React.FC = () => {
   
   const [isAddProductModalOpen, setAddProductModalOpen] = useState(false);
   const [isCloseTableModalOpen, setCloseTableModalOpen] = useState(false);
+  const [isWaiterModalOpen, setWaiterModalOpen] = useState(false);
+  const [selectedWaiterId, setSelectedWaiterId] = useState<string | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('Cartão de Crédito');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -33,6 +36,11 @@ const Order: React.FC = () => {
 
   const table = getTableById(tableId);
   const order = getOpenOrderByTableId(tableId);
+
+  const waiter = useMemo(() => {
+    if (!order) return null;
+    return waiters.find(w => w.id === order.waiterId);
+  }, [order, waiters]);
 
   const handleCloseTable = async () => {
     if (order) {
@@ -51,6 +59,32 @@ const Order: React.FC = () => {
   const filteredProducts = useMemo(() => {
     return products.filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [products, searchTerm]);
+
+  const handleOpenAddProductFlow = () => {
+    if (order) {
+      setAddProductModalOpen(true);
+    } else {
+      setSelectedWaiterId(null);
+      setWaiterModalOpen(true);
+    }
+  };
+
+  const handleWaiterSelect = (waiterId: string) => {
+    setSelectedWaiterId(waiterId);
+    setWaiterModalOpen(false);
+    setAddProductModalOpen(true);
+  };
+
+  const handleAddProduct = async (product: Product) => {
+    const waiterForOrder = order ? order.waiterId : selectedWaiterId;
+    if (!waiterForOrder) {
+        alert("Erro: O garçom não foi selecionado. Por favor, tente novamente.");
+        setAddProductModalOpen(false);
+        setWaiterModalOpen(true);
+        return;
+    }
+    await addProductToOrder(tableId, product, waiterForOrder);
+  };
 
   if (!table) {
     return <div>Mesa não encontrada.</div>;
@@ -103,7 +137,7 @@ const Order: React.FC = () => {
             <p className="text-gray-500 text-center py-8">Nenhum item adicionado a este pedido ainda.</p>
           )}
            <div className="mt-6 flex justify-between">
-            <Button onClick={() => setAddProductModalOpen(true)} disabled={isLoading}>
+            <Button onClick={handleOpenAddProductFlow} disabled={isLoading}>
               <PlusIcon className="w-5 h-5 inline-block mr-2" />
               Adicionar Produto
             </Button>
@@ -125,6 +159,7 @@ const Order: React.FC = () => {
                 <>
                 <p><strong>Pedido ID:</strong> {order.id.slice(-6)}</p>
                 <p><strong>Aberto em:</strong> {new Date(order.createdAt).toLocaleString('pt-BR')}</p>
+                {waiter && <p><strong>Garçom:</strong> {waiter.name}</p>}
                 </>
             )}
         </Card>
@@ -145,11 +180,26 @@ const Order: React.FC = () => {
                         <p className="font-semibold">{product.name}</p>
                         <p className="text-sm text-gray-600">R$ {product.price.toFixed(2)} - Estoque: {product.stock}</p>
                     </div>
-                    <Button onClick={() => addProductToOrder(tableId, product, 'waiter_1')} disabled={product.stock <= 0 || isLoading}>
+                    <Button onClick={() => handleAddProduct(product)} disabled={product.stock <= 0 || isLoading}>
                        <PlusIcon className="w-5 h-5"/>
                     </Button>
                 </div>
             ))}
+        </div>
+      </Modal>
+
+      <Modal isOpen={isWaiterModalOpen} onClose={() => setWaiterModalOpen(false)} title="Selecione o Garçom">
+        <div className="space-y-3">
+          {waiters.map(waiter => (
+            <button 
+              key={waiter.id} 
+              onClick={() => handleWaiterSelect(waiter.id)}
+              className="w-full text-left p-4 rounded-lg hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-green transition-colors flex items-center space-x-4"
+            >
+              <UserIcon className="w-8 h-8 text-brand-green-light" />
+              <span className="text-lg font-semibold text-gray-700">{waiter.name}</span>
+            </button>
+          ))}
         </div>
       </Modal>
 

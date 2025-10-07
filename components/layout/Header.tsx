@@ -2,6 +2,7 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
 import { UserCircleIcon, BellIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import FirebaseStatus from '../ui/FirebaseStatus';
 
 const Header: React.FC = () => {
   const location = useLocation();
@@ -23,6 +24,7 @@ const Header: React.FC = () => {
     <header className="flex items-center justify-between p-4 bg-white border-b shadow-sm">
       <h1 className="text-2xl font-semibold text-brand-green-dark">{getTitle()}</h1>
       <div className="flex items-center space-x-4">
+        <FirebaseStatus />
         <div className="relative">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
              <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
