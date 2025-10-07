@@ -34,15 +34,15 @@
         // Você pode encontrá-las no Console do Firebase > Configurações do Projeto > Geral.
         window.firebaseConfig = {
           apiKey: "AIzaSyDDNIBRwvoP9TzfBUdEKQMgYiMLIUotoWU",
-  authDomain: "flora-4b14c.firebaseapp.com",
-  projectId: "flora-4b14c",
-  storageBucket: "flora-4b14c.firebasestorage.app",
-  messagingSenderId: "356514736805",
-  appId: "1:356514736805:web:95c8230cc27d1b857a7b4c"
-};
-
+          authDomain: "flora-4b14c.firebaseapp.com",
+          projectId: "flora-4b14c",
+          storageBucket: "flora-4b14c.firebasestorage.app",
+          messagingSenderId: "356514736805",
+          appId: "1:356514736805:web:95c8230cc27d1b857a7b4c"
         };
-        // Initialize Firebase
+
+        // Initialize Firebase. This will show an error in the console if the config is not replaced,
+        // which is intended. The FirebaseConfigWarning component will guide the user to fix it.
         // @ts-ignore
         const app = initializeApp(window.firebaseConfig);
         // @ts-ignore
