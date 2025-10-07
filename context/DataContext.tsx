@@ -3,7 +3,7 @@ import { Product, Table, TableStatus, Order, OrderItem, Waiter } from '../types'
 import { seedProducts, seedTables, seedWaiters } from '../services/seedData';
 import { 
   getFirestore, collection, onSnapshot, doc, addDoc, updateDoc, deleteDoc, runTransaction, serverTimestamp, Timestamp, getDocs, writeBatch, query, where, getDoc 
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+} from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
 
 // @ts-ignore
 const db = window.db;

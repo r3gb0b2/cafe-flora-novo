@@ -29,24 +29,31 @@
 <script type="module">
   // Import the functions you need from the SDKs you need
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js";
+  import { getFirestore } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js";
   import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.3.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
+  
   // Your web app's Firebase configuration
   // For Firebase JS SDK v7.20.0 and later, measurementId is optional
   const firebaseConfig = {
     apiKey: "AIzaSyDsi6VpfhLQW8UWgAp5c4TRV7vqOkDyauU",
-    authDomain: "stingressos-e0a5f.firebaseapp.com",
-    projectId: "stingressos-e0a5f",
-    storageBucket: "stingressos-e0a5f.firebasestorage.app",
+    authDomain: "stinggressos-e0a5f.firebaseapp.com",
+    projectId: "stinggressos-e0a5f",
+    storageBucket: "stinggressos-e0a5f.firebasestorage.app",
     messagingSenderId: "424186734009",
     appId: "1:424186734009:web:c4f601ce043761cd784268",
     measurementId: "G-M30E0D9TP2"
   };
 
+  // Make config available globally for the app context and other components
+  window.firebaseConfig = firebaseConfig;
+
   // Initialize Firebase
   const app = initializeApp(firebaseConfig);
+  // Initialize Firestore and make it available globally
+  const db = getFirestore(app);
+  window.db = db;
+
+  // Initialize Analytics (optional)
   const analytics = getAnalytics(app);
 </script>
 

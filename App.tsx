@@ -36,15 +36,20 @@ const LoadingOverlay: React.FC = () => {
         );
       case 'permission-denied':
         const rulesUrl = `https://console.firebase.google.com/project/${error.projectId}/firestore/rules`;
+        const gcpApiUrl = `https://console.cloud.google.com/apis/library/firebaseinstallations.googleapis.com?project=${error.projectId}`;
         return (
           <>
             <h2 className="text-2xl font-bold text-red-700 mb-4">Erro de Permissão do Banco de Dados</h2>
             <p className="text-gray-700 text-left mb-4">{error.message}</p>
-            <p className="text-sm text-gray-500 text-left">
-              Para que o aplicativo funcione, o banco de dados precisa permitir a leitura e escrita de dados. Para um ambiente de <b>desenvolvimento</b>, você pode usar as seguintes regras de segurança. Copie e cole no seu editor de regras do Firestore:
-            </p>
-            <pre className="bg-gray-100 p-3 rounded-md text-left text-xs my-4 overflow-x-auto border">
-              <code>
+            
+            <div className="text-left space-y-4 mt-4">
+                <div>
+                    <h3 className="font-semibold text-gray-800 mb-2">Solução Possível #1: Regras do Firestore</h3>
+                    <p className="text-sm text-gray-600 mb-2">
+                        A causa mais comum para este erro são as regras de segurança do Firestore. Para um ambiente de <strong>desenvolvimento</strong>, você pode usar as regras abertas abaixo.
+                    </p>
+                    <pre className="bg-gray-100 p-3 rounded-md text-xs my-2 overflow-x-auto border">
+                        <code>
 {`rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -55,14 +60,27 @@ service cloud.firestore {
     }
   }
 }`}
-              </code>
-            </pre>
-            <p className="text-xs text-yellow-700 bg-yellow-50 p-3 rounded-md border border-yellow-200"><b>Aviso:</b> Estas regras abertas são apenas para desenvolvimento. Antes de lançar seu aplicativo, certifique-se de configurar regras de segurança mais restritivas.</p>
-            {error.projectId && (
-              <a href={rulesUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-4 text-blue-600 hover:underline font-semibold">
-                Abrir editor de regras para o projeto '{error.projectId}'
-              </a>
-            )}
+                        </code>
+                    </pre>
+                    {error.projectId && (
+                        <a href={rulesUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline font-semibold">
+                            Abrir Editor de Regras para '{error.projectId}'
+                        </a>
+                    )}
+                </div>
+
+                <div className="pt-4 border-t">
+                    <h3 className="font-semibold text-gray-800 mb-2">Solução Possível #2: Permissões da API</h3>
+                    <p className="text-sm text-gray-600">
+                        Se suas regras estão corretas, o problema pode ser a nível de projeto. Erros como <code className="text-xs bg-orange-100 text-orange-800 p-1 rounded">403 PERMISSION_DENIED</code> ou <code className="text-xs bg-orange-100 text-orange-800 p-1 rounded">installations/request-failed</code> no console do navegador indicam que a <strong>Firebase Installations API</strong> pode estar desativada.
+                    </p>
+                    {error.projectId && (
+                        <a href={gcpApiUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-2 text-sm text-blue-600 hover:underline font-semibold">
+                            Verificar e Habilitar a API para '{error.projectId}'
+                        </a>
+                    )}
+                </div>
+            </div>
           </>
         );
       default: // timeout, generic
@@ -70,9 +88,14 @@ service cloud.firestore {
           <>
             <h2 className="text-2xl font-bold text-red-700 mb-4">Erro de Carregamento</h2>
             <p className="text-gray-700 text-left">{error.message}</p>
-            <p className="mt-6 text-sm text-gray-500 text-left">
-              <b>Dica:</b> Verifique sua conexão com a internet. Se você for o desenvolvedor, certifique-se de que as credenciais do Firebase em <code>index.html</code> estão corretas.
-            </p>
+            <div className="mt-6 text-sm text-gray-500 text-left">
+              <p className="font-bold">Dicas para solução:</p>
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>Verifique sua conexão com a internet.</li>
+                <li>Confirme se as credenciais do Firebase no arquivo <code>index.html</code> estão corretas e não são as de exemplo.</li>
+                <li>Abra o <strong>console do desenvolvedor</strong> do seu navegador (geralmente com a tecla F12) e procure por mensagens de erro detalhadas do Firebase na aba "Console".</li>
+              </ul>
+            </div>
           </>
         );
     }
