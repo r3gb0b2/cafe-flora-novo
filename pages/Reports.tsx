@@ -3,8 +3,7 @@ import { useData } from '../context/DataContext';
 import { ReportType, Order } from '../types';
 import Button from '../components/ui/Button';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
-// @ts-ignore
-const { jsPDF } = window.jspdf;
+// @ts-ignore jsPDF is loaded via a script tag in index.html
 
 const Reports: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ReportType>(ReportType.Sales);
@@ -12,7 +11,16 @@ const Reports: React.FC = () => {
   const closedOrders = orders.filter(o => o.status === 'closed');
 
   const handleExportPDF = () => {
+    // @ts-ignore
+    if (!window.jspdf || typeof window.jspdf.jsPDF !== 'function') {
+        alert("A biblioteca para gerar PDF não pôde ser carregada. Por favor, recarregue a página e tente novamente.");
+        console.error("jsPDF library is not available on the window object.");
+        return;
+    }
+    // @ts-ignore
+    const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    
     doc.text(`Relatório de ${activeTab}`, 14, 16);
     
     let head: string[][] = [];
@@ -48,7 +56,8 @@ const Reports: React.FC = () => {
             ]);
             break;
     }
-
+    
+    // @ts-ignore autoTable is a plugin
     doc.autoTable({
         head: head,
         body: body,
