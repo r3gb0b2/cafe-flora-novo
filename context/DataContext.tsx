@@ -107,17 +107,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             if (firebaseStatus === 'connecting') setFirebaseStatus('connected');
             const ordersData = snapshot.docs.map(doc => {
               const data = doc.data();
-              return {
+              // Explicitly create a new plain object to guarantee no proxies or circular refs from Firestore's offline cache.
+              const plainOrder = {
                   id: doc.id,
                   tableId: data.tableId,
-                  items: data.items,
+                  items: data.items || [], // Ensure items is an array
                   total: data.total,
                   waiterId: data.waiterId,
-                  createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-                  closedAt: data.closedAt ? (data.closedAt as Timestamp).toDate() : undefined,
                   paymentMethod: data.paymentMethod,
                   status: data.status,
-              } as Order;
+                  // Safely convert Timestamps to Dates
+                  createdAt: (data.createdAt && typeof data.createdAt.toDate === 'function')
+                      ? data.createdAt.toDate()
+                      : new Date(),
+                  closedAt: (data.closedAt && typeof data.closedAt.toDate === 'function')
+                      ? data.closedAt.toDate()
+                      : undefined,
+              };
+              return plainOrder as Order;
             });
             setOrders(ordersData);
             setInitialLoad(prev => ({ ...prev, orders: true }));
